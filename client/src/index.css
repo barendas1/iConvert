@@ -38,6 +38,12 @@
     /* Destructive: #dc3545 -> 354 70% 54% */
     --destructive: 354 70% 54%;
     --destructive-foreground: 0 0% 100%;
+
+    /* Success: #56c07b -> 141 47% 55% */
+    --success: 141 47% 55%;
+    --success-foreground: 0 0% 100%;
+    /* Success2: #6fc98f -> 141 46% 61% */
+    --success2: 141 46% 61%;
     
     /* Border/Input: #D8D8D8 -> 0 0% 85% */
     --border: 0 0% 85%;
