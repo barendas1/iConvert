@@ -83,9 +83,10 @@ export default function Home() {
           const worksheet = workbook.Sheets[sheetName];
           
           // Convert to JSON for processing
+          // header: 1 returns array of arrays
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
           
-          // Process the data (simulating the Python logic in JS)
+          // Process the data
           const processedWorkbook = await processData(jsonData);
           
           setConvertedData(processedWorkbook);
@@ -105,17 +106,41 @@ export default function Home() {
     }
   };
 
-  // Process data logic (mimicking the Python script)
+  // Process data logic
   const processData = async (sourceData: any[]) => {
     // Create a new workbook for output
     const wb = XLSX.utils.book_new();
     
-    // Define headers based on the template
+    // Define SINGLE ROW header based on the template requirements
+    // Mapping based on previous instructions but flattened to one row
     const headers = [
-      [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 'Dispatch', null, null, null, null, null],
-      [null, null, null, null, null, 'Strength Age', null, 'Design', 'Minimum', 'Maximum', 'Design', 'Minimum', 'Maximum', 'Max', 'Max', 'Max', 'Max', 'Mix Class Names', null, 'Slump', null, 'Constituent', 'Constituent', null, 'Unit'],
-      ['Plant Code', 'Mix Name', 'Description', 'Short Description', 'Item Category', '(Default - 28)', 'Strength', 'Air Content', 'Air Content', 'Air Content', 'Slump', 'Slump', 'Slump', 'Batch Size', 'Water', 'W/C+P', 'W/C', '(Separate Mix Classes With A Semicolon (;))', 'Mix Usage', 'Range', null, 'Item Code', 'Item Description', 'Quantity', 'Name'],
-      ['(Required)', '(Required)', null, null, null, '(Days)', '(PSI)', '(%)', '(%)', '(%)', '(in)', '(in)', '(in)', '(Unitless)', '(gal)', '(Ratio)', '(Ratio)', null, null, '(Text)', null, '(Required)', null, '(Required)', '(Required)']
+      [
+        'Plant Code',           // A
+        'Mix Name',             // B
+        'Description',          // C
+        'Short Description',    // D
+        'Item Category',        // E
+        'Strength Age',         // F
+        'Strength (PSI)',       // G
+        'Design Air Content (%)', // H
+        'Min Air Content (%)',  // I
+        'Max Air Content (%)',  // J
+        'Design Slump (in)',    // K
+        'Min Slump (in)',       // L
+        'Max Slump (in)',       // M
+        'Batch Size',           // N
+        'Water',                // O
+        'W/C+P',                // P
+        'W/C',                  // Q
+        'Mix Class Names',      // R
+        'Mix Usage',            // S
+        'Range',                // T
+        'Dispatch',             // U
+        'Constituent Item Code', // V
+        'Constituent Item Description', // W
+        'Quantity',             // X
+        'Unit Name'             // Y
+      ]
     ];
     
     const outputData = [...headers];
@@ -132,7 +157,7 @@ export default function Home() {
     };
 
     // Process source rows (skipping header row 0)
-    // Source columns mapping:
+    // Source columns mapping (0-indexed):
     // A(0) -> Plant Code (A/0)
     // C(2) -> Mix Name (B/1)
     // D(3) -> Description (C/2)
@@ -148,6 +173,7 @@ export default function Home() {
 
     for (let i = 1; i < sourceData.length; i++) {
       const row = sourceData[i];
+      // Skip empty rows
       if (!row || row.length === 0) continue;
 
       const newRow = new Array(25).fill(null);
@@ -182,8 +208,8 @@ export default function Home() {
     // Filter out Air component rows (where both V and W are "Air")
     // Indices: V=21, W=22
     const filteredData = outputData.filter((row, index) => {
-      // Keep headers
-      if (index < 4) return true;
+      // Keep header (index 0)
+      if (index === 0) return true;
       
       const colV = row[21];
       const colW = row[22];
