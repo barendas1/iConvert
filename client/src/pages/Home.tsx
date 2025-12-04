@@ -8,6 +8,7 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { convertCommandSeries } from "../converters/mixes/CommandSeries";
 
 // Dispatch system options
 const DISPATCH_OPTIONS = [
@@ -61,12 +62,6 @@ export default function Home() {
   const handleConvert = async () => {
     if (!file || !selectedDispatch) return;
     
-    // Only Command Series is supported for now
-    if (selectedDispatch !== "Command Series") {
-      setError(`Conversion logic for ${selectedDispatch} is not yet implemented.`);
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
 
@@ -83,17 +78,34 @@ export default function Home() {
           const worksheet = workbook.Sheets[sheetName];
           
           // Convert to JSON for processing
-          // header: 1 returns array of arrays
+          // header: 1 returns array of arrays, which is safer for column indexing
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
           
-          // Process the data
-          const processedWorkbook = await processData(jsonData);
+          console.log("Source data loaded:", jsonData.length, "rows");
           
-          setConvertedData(processedWorkbook);
+          let processedData: any[][] = [];
+
+          // Select the appropriate converter
+          if (activeTab === "mixes") {
+            if (selectedDispatch === "Command Series") {
+              processedData = convertCommandSeries(jsonData);
+            } else {
+              throw new Error(`Converter for ${selectedDispatch} is not yet implemented.`);
+            }
+          } else {
+             throw new Error("Material imports are not yet supported.");
+          }
+          
+          // Create a new workbook with the processed data
+          const newWb = XLSX.utils.book_new();
+          const newWs = XLSX.utils.aoa_to_sheet(processedData);
+          XLSX.utils.book_append_sheet(newWb, newWs, "Mix Import");
+          
+          setConvertedData(newWb);
           setSuccess(true);
-        } catch (err) {
-          console.error(err);
-          setError("Error processing file. Please check the file format.");
+        } catch (err: any) {
+          console.error("Conversion error:", err);
+          setError(err.message || "Error processing file. Please check the file format.");
         } finally {
           setIsProcessing(false);
         }
@@ -104,129 +116,6 @@ export default function Home() {
       setError("An unexpected error occurred.");
       setIsProcessing(false);
     }
-  };
-
-  // Process data logic
-  const processData = async (sourceData: any[]) => {
-    // Create a new workbook for output
-    const wb = XLSX.utils.book_new();
-    
-    // Define SINGLE ROW header based on the template requirements
-    // Mapping based on previous instructions but flattened to one row
-    const headers = [
-      [
-        'Plant Code',           // A
-        'Mix Name',             // B
-        'Description',          // C
-        'Short Description',    // D
-        'Item Category',        // E
-        'Strength Age',         // F
-        'Strength (PSI)',       // G
-        'Design Air Content (%)', // H
-        'Min Air Content (%)',  // I
-        'Max Air Content (%)',  // J
-        'Design Slump (in)',    // K
-        'Min Slump (in)',       // L
-        'Max Slump (in)',       // M
-        'Batch Size',           // N
-        'Water',                // O
-        'W/C+P',                // P
-        'W/C',                  // Q
-        'Mix Class Names',      // R
-        'Mix Usage',            // S
-        'Range',                // T
-        'Dispatch',             // U
-        'Constituent Item Code', // V
-        'Constituent Item Description', // W
-        'Quantity',             // X
-        'Unit Name'             // Y
-      ]
-    ];
-    
-    const outputData = [...headers];
-    
-    // Helper to parse range "10-20"
-    const parseRange = (rangeStr: any) => {
-      if (!rangeStr) return [null, null];
-      const str = String(rangeStr).trim();
-      const match = str.match(/^(\d+\.?\d*)\s*-\s*(\d+\.?\d*)$/);
-      if (match) {
-        return [parseFloat(match[1]), parseFloat(match[2])];
-      }
-      return [null, null];
-    };
-
-    // Process source rows (skipping header row 0)
-    // Source columns mapping (0-indexed):
-    // A(0) -> Plant Code (A/0)
-    // C(2) -> Mix Name (B/1)
-    // D(3) -> Description (C/2)
-    // H(7) -> Strength (G/6)
-    // J(9) -> Design Air (H/7)
-    // K(10) -> Min/Max Air (I/8, J/9)
-    // L(11) -> Design Slump (K/10)
-    // M(12) -> Min/Max Slump (L/11, M/12)
-    // O(14) -> Item Code (V/21)
-    // P(15) -> Item Desc (W/22)
-    // S(18) -> Quantity (X/23)
-    // T(19) -> Unit (Y/24)
-
-    for (let i = 1; i < sourceData.length; i++) {
-      const row = sourceData[i];
-      // Skip empty rows
-      if (!row || row.length === 0) continue;
-
-      const newRow = new Array(25).fill(null);
-      
-      // Map data
-      newRow[0] = row[0]; // Plant Code
-      newRow[1] = row[2]; // Mix Name
-      newRow[2] = row[3]; // Description
-      newRow[6] = row[7]; // Strength
-      newRow[7] = row[9]; // Design Air
-      
-      // Air Range
-      const [minAir, maxAir] = parseRange(row[10]);
-      newRow[8] = minAir;
-      newRow[9] = maxAir;
-      
-      newRow[10] = row[11]; // Design Slump
-      
-      // Slump Range
-      const [minSlump, maxSlump] = parseRange(row[12]);
-      newRow[11] = minSlump;
-      newRow[12] = maxSlump;
-      
-      newRow[21] = row[14]; // Item Code
-      newRow[22] = row[15]; // Item Desc
-      newRow[23] = row[18]; // Quantity
-      newRow[24] = row[19]; // Unit
-      
-      outputData.push(newRow);
-    }
-    
-    // Filter out Air component rows (where both V and W are "Air")
-    // Indices: V=21, W=22
-    const filteredData = outputData.filter((row, index) => {
-      // Keep header (index 0)
-      if (index === 0) return true;
-      
-      const colV = row[21];
-      const colW = row[22];
-      
-      if (colV && colW && 
-          String(colV).trim().toUpperCase() === "AIR" && 
-          String(colW).trim().toUpperCase() === "AIR") {
-        return false;
-      }
-      return true;
-    });
-
-    // Create worksheet
-    const ws = XLSX.utils.aoa_to_sheet(filteredData);
-    XLSX.utils.book_append_sheet(wb, ws, "Mix Import");
-    
-    return wb;
   };
 
   const handleDownload = () => {
