@@ -4,11 +4,10 @@ import * as XLSX from "xlsx";
  * Command Series Mix Converter
  * 
  * Logic:
- * 1. Reads source data starting from Row 5 (index 4) to skip the 4-row header.
- * 2. Maps columns based on the specific Command Series layout.
- * 3. Splits Air and Slump ranges.
- * 4. Filters out rows where both Constituent Code and Description are "Air".
- * 5. Outputs a file with a SINGLE header row.
+ * 1. Reads source data starting from Row 1 (Index 1), skipping Row 0 (Header).
+ * 2. Maps columns based on the flat table structure of the 'Mixes' sheet.
+ * 3. Implements "Fill Down" logic just in case, but primarily relies on direct mapping.
+ * 4. Filters out duplicate "Air" rows.
  */
 
 export const convertCommandSeries = (sourceData: any[]): any[][] => {
@@ -54,70 +53,89 @@ export const convertCommandSeries = (sourceData: any[]): any[][] => {
     return [null, null];
   };
 
-  // START PROCESSING FROM ROW 5 (Index 4)
-  // The first 4 rows (0-3) are headers in the source file.
-  const START_ROW_INDEX = 4;
+  // START PROCESSING FROM ROW 1 (Index 1) - Skipping Header Row 0
+  // The 'Mixes' sheet is a flat table starting at Row 0
+  const START_ROW_INDEX = 1;
 
   console.log(`Command Series Converter: Processing ${sourceData.length} rows, starting at index ${START_ROW_INDEX}`);
+
+  // State for "Fill Down" logic
+  let lastPlantCode = null;
+  let lastMixName = null;
+  let lastDescription = null;
+  let lastStrength = null;
+  let lastDesignAir = null;
+  let lastAirRange = null;
+  let lastDesignSlump = null;
+  let lastSlumpRange = null;
 
   for (let i = START_ROW_INDEX; i < sourceData.length; i++) {
     const row = sourceData[i];
     
-    // Skip empty rows
+    // Skip completely empty rows
     if (!row || row.length === 0) continue;
 
-    // Skip summary rows (e.g., "Grand Total", "Sum of Quantity")
-    // Check Column A (Index 0)
+    // Check for Summary/Total rows in Column A
     const colA = row[0] ? String(row[0]) : "";
-    if (colA.includes("Total") || colA.includes("Sum of") || colA === "(blank)") {
+    if (colA.includes("Total") || colA.includes("Sum of")) {
       continue;
     }
 
+    // Extract current row values
+    let plantCode = row[0];
+    let mixName = row[2]; // Source Col C
+    
+    // FILL DOWN LOGIC
+    // If Plant Code and Mix Name are present, update "last" values
+    if (plantCode && mixName && String(plantCode) !== "(blank)" && String(mixName) !== "(blank)") {
+      lastPlantCode = plantCode;
+      lastMixName = mixName;
+      lastDescription = row[3]; // Source Col D
+      lastStrength = row[7]; // Source Col H
+      lastDesignAir = row[9]; // Source Col J
+      lastAirRange = row[10]; // Source Col K
+      lastDesignSlump = row[11]; // Source Col L
+      lastSlumpRange = row[12]; // Source Col M
+    } 
+    
+    // Ensure we have a valid mix context
+    if (!lastPlantCode || !lastMixName) continue;
+
     const newRow = new Array(25).fill(null);
 
-    // MAPPING LOGIC (0-indexed based on source file)
-    // A(0) -> Plant Code (Output Col 0)
-    // C(2) -> Mix Name (Output Col 1)
-    // D(3) -> Description (Output Col 2)
-    // H(7) -> Strength (Output Col 6)
-    // J(9) -> Design Air (Output Col 7)
-    // K(10) -> Air Range (Output Cols 8 & 9)
-    // L(11) -> Design Slump (Output Col 10)
-    // M(12) -> Slump Range (Output Cols 11 & 12)
-    // O(14) -> Item Code (Output Col 21)
-    // P(15) -> Item Desc (Output Col 22)
-    // S(18) -> Quantity (Output Col 23)
-    // T(19) -> Unit (Output Col 24)
+    // Map Mix-Level Data (using cached values)
+    newRow[0] = lastPlantCode;
+    newRow[1] = lastMixName;
+    newRow[2] = lastDescription;
+    newRow[6] = lastStrength;
+    newRow[7] = lastDesignAir;
 
-    newRow[0] = row[0]; // Plant Code
-    newRow[1] = row[2]; // Mix Name (Source Col C)
-    newRow[2] = row[3]; // Description (Source Col D)
-    newRow[6] = row[7]; // Strength (Source Col H)
-    newRow[7] = row[9]; // Design Air (Source Col J)
-
-    // Split Air Range (Source Col K)
-    const [minAir, maxAir] = parseRange(row[10]);
+    // Split Air Range
+    const [minAir, maxAir] = parseRange(lastAirRange);
     newRow[8] = minAir;
     newRow[9] = maxAir;
 
-    newRow[10] = row[11]; // Design Slump (Source Col L)
+    newRow[10] = lastDesignSlump;
 
-    // Split Slump Range (Source Col M)
-    const [minSlump, maxSlump] = parseRange(row[12]);
+    // Split Slump Range
+    const [minSlump, maxSlump] = parseRange(lastSlumpRange);
     newRow[11] = minSlump;
     newRow[12] = maxSlump;
 
+    // Map Component-Level Data (from CURRENT row)
     newRow[21] = row[14]; // Item Code (Source Col O)
     newRow[22] = row[15]; // Item Desc (Source Col P)
     newRow[23] = row[18]; // Quantity (Source Col S)
     newRow[24] = row[19]; // Unit (Source Col T)
 
-    outputData.push(newRow);
+    // Only add row if it has a component (Item Code or Description)
+    // OR if it's the first row of a mix (to ensure mix exists even without components)
+    if (newRow[21] || newRow[22] || (plantCode && mixName)) {
+      outputData.push(newRow);
+    }
   }
 
   // FILTER OUT "AIR" COMPONENT ROWS
-  // Remove rows where both Item Code (Col 21) and Item Desc (Col 22) are "Air"
-  // But keep the header row (index 0)
   const filteredData = outputData.filter((row, index) => {
     if (index === 0) return true; // Keep header
 

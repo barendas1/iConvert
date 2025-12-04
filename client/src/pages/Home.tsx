@@ -73,8 +73,21 @@ export default function Home() {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
           
-          // Get the first sheet
-          const sheetName = workbook.SheetNames[0];
+          // CRITICAL FIX: Select the 'Mixes' sheet if it exists, otherwise try the second sheet, then first
+          // The file has ['Pivot', 'Mixes'], and we want 'Mixes'
+          let sheetName = workbook.SheetNames.find(name => name.toLowerCase().includes('mix'));
+          
+          // Fallback logic if 'Mixes' isn't found by name
+          if (!sheetName) {
+            if (workbook.SheetNames.length > 1) {
+              // Try the second sheet (index 1) as it's likely the data sheet if index 0 is a pivot/cover
+              sheetName = workbook.SheetNames[1];
+            } else {
+              sheetName = workbook.SheetNames[0];
+            }
+          }
+          
+          console.log(`Using sheet: ${sheetName}`);
           const worksheet = workbook.Sheets[sheetName];
           
           // Convert to JSON for processing
@@ -172,7 +185,7 @@ export default function Home() {
 
             <TabsContent value="mixes" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <Card className="border-border shadow-sm overflow-hidden">
-                <CardHeader className="bg-secondary/5 border-b border-border pb-6">
+                <CardHeader className="bg-secondary/1 border-b border-border pb-6">
                   <CardTitle className="text-xl text-secondary">Configuration</CardTitle>
                   <CardDescription>Select the source dispatch system for your data.</CardDescription>
                 </CardHeader>
@@ -203,7 +216,7 @@ export default function Home() {
               </Card>
 
               <Card className="border-border shadow-sm overflow-hidden">
-                <CardHeader className="bg-secondary/5 border-b border-border pb-6 flex flex-row items-center justify-between">
+                <CardHeader className="bg-secondary/1 border-b border-border pb-6 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
                     <CardDescription>Upload the Excel file containing mix designs.</CardDescription>
