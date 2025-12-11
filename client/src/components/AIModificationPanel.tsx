@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Loader2, Sparkles } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AlertCircle, ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 
@@ -21,6 +22,7 @@ export function AIModificationPanel({ workbook, originalWorkbook, onModify, onRe
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleModify = async () => {
     if (!workbook || !apiKey.trim() || !instruction.trim()) {
@@ -219,82 +221,94 @@ Generate the transformation code:`
 
   return (
     <Card className="border-border shadow-sm overflow-hidden">
-      <CardHeader className="bg-primary/5 border-b border-border pb-6">
-        <div className="flex items-center gap-1">
-          <Sparkles className="h-5 w-5 text-primary" />
-          <CardTitle className="text-xl text-secondary">AI Data Modification</CardTitle>
-        </div>
-        <CardDescription>
-          Use AI to modify your preview data with natural language instructions
-        </CardDescription>
-      </CardHeader>
-      
-      <CardContent className="pt-4 space-y-3">
-        <div className="space-y-2">
-          <Label htmlFor="instruction">Modification Instructions</Label>
-          <div className="relative flex items-stretch">
-            <Textarea
-              id="instruction"
-              placeholder="Example: In column 'Plant Code', append a 0 to each value"
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              rows={3}
-              className="resize-none pr-24"
-            />
-            <Button
-              onClick={handleModify}
-              disabled={!workbook || !apiKey.trim() || !instruction.trim() || isProcessing}
-              className="absolute right-1 top-1 h-[70px] w-[10%] min-w-[60px] bg-primary hover:bg-primary-hover flex items-center justify-center"
-            >
-              {isProcessing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Describe what changes you want to make to the data
-          </p>
-        </div>
-
-        {error && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-start gap-3 text-destructive">
-            <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <p className="font-medium">Error</p>
-              <pre className="text-xs opacity-90 mt-1 whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">{error}</pre>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="bg-primary/5 border-b border-border pb-3 pt-3 cursor-pointer hover:bg-primary/10 transition-colors">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg text-secondary">AI Data Modification</CardTitle>
+              </div>
+              <ChevronDown 
+                className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`}
+              />
             </div>
-          </div>
-        )}
-
-        {/* Logs Display */}
-        {logs.length > 0 && (
-          <div className="bg-secondary/5 border border-border rounded-lg p-3 space-y-1 max-h-32 overflow-y-auto">
-            <p className="font-medium text-xs text-muted-foreground mb-2">Transformation Log:</p>
-            {logs.map((log, index) => (
-              <p key={index} className="text-xs font-mono text-muted-foreground">{log}</p>
-            ))}
-          </div>
-        )}
-
-        {/* Success message and Revert button in compact horizontal layout */}
-        {success && workbook && originalWorkbook && (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 bg-success/10 border border-success/20 rounded-lg px-3 py-2 text-success flex items-center gap-2">
-              <span className="text-sm font-medium">✓ Modified successfully</span>
+          </CardHeader>
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent>
+          <CardContent className="pt-4 space-y-3">
+            <CardDescription className="text-sm">
+              Use AI to modify your preview data with natural language instructions
+            </CardDescription>
+            
+            <div className="space-y-2">
+              <Label htmlFor="instruction">Modification Instructions</Label>
+              <div className="relative flex items-stretch">
+                <Textarea
+                  id="instruction"
+                  placeholder="Example: In column 'Plant Code', append a 0 to each value"
+                  value={instruction}
+                  onChange={(e) => setInstruction(e.target.value)}
+                  rows={3}
+                  className="resize-none pr-24"
+                />
+                <Button
+                  onClick={handleModify}
+                  disabled={!workbook || !apiKey.trim() || !instruction.trim() || isProcessing}
+                  className="absolute right-1 top-1 h-[70px] w-[10%] min-w-[60px] bg-primary hover:bg-primary-hover flex items-center justify-center"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Describe what changes you want to make to the data
+              </p>
             </div>
-            <Button
-              onClick={onRevert}
-              variant="outline"
-              size="sm"
-              className="border-destructive/30 text-destructive hover:bg-destructive/10 whitespace-nowrap"
-            >
-              Revert
-            </Button>
-          </div>
-        )}
-      </CardContent>
+
+            {error && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-start gap-3 text-destructive">
+                <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-medium">Error</p>
+                  <pre className="text-xs opacity-90 mt-1 whitespace-pre-wrap max-h-40 overflow-y-auto font-mono">{error}</pre>
+                </div>
+              </div>
+            )}
+
+            {/* Logs Display */}
+            {logs.length > 0 && (
+              <div className="bg-secondary/5 border border-border rounded-lg p-3 space-y-1 max-h-32 overflow-y-auto">
+                <p className="font-medium text-xs text-muted-foreground mb-2">Transformation Log:</p>
+                {logs.map((log, index) => (
+                  <p key={index} className="text-xs font-mono text-muted-foreground">{log}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Success message and Revert button in compact horizontal layout */}
+            {success && workbook && originalWorkbook && (
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-success/10 border border-success/20 rounded-lg px-3 py-2 text-success flex items-center gap-2">
+                  <span className="text-sm font-medium">✓ Modified successfully</span>
+                </div>
+                <Button
+                  onClick={onRevert}
+                  variant="outline"
+                  size="sm"
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 whitespace-nowrap"
+                >
+                  Revert
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
   );
 }
