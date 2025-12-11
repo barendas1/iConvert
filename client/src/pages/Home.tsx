@@ -8,7 +8,8 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { convertCommandSeries } from "../converters/mixes/CommandSeries";
+import { convertMPAQMaterials } from "../converters/materials/mpaqMaterialsConverter";
+import { convertMPAQMixes } from "../converters/mixes/mpaqMixesConverter";
 
 // Dispatch system options
 const DISPATCH_OPTIONS = [
@@ -101,7 +102,7 @@ export default function Home() {
           // Select the appropriate converter
           if (activeTab === "mixes") {
             if (selectedDispatch === "Command Series") {
-              processedData = convertCommandSeries(jsonData);
+              processedData = convertMPAQMixes(jsonData);
             } else {
               throw new Error(`Converter for ${selectedDispatch} is not yet implemented.`);
             }
@@ -176,10 +177,9 @@ export default function Home() {
               </TabsTrigger>
               <TabsTrigger 
                 value="materials" 
-                disabled
-                className="rounded-lg text-base font-medium h-12 opacity-50 cursor-not-allowed"
+                className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-12 transition-all"
               >
-                Material Imports (Coming Soon)
+                Material Imports
               </TabsTrigger>
             </TabsList>
 
@@ -201,11 +201,11 @@ export default function Home() {
                           <SelectItem 
                             key={option} 
                             value={option}
-                            disabled={option !== "Command Series"}
+                            disabled={option !== "MPAQ"}
                             className="cursor-pointer py-3"
                           >
-                            <span className={cn(option !== "Command Series" && "opacity-50")}>
-                              {option} {option !== "Command Series" && "(Coming Soon)"}
+                            <span className={cn(option !== "MPAQ" && "opacity-50")}>
+                              {option} {option !== "MPAQ" && "(Coming Soon)"}
                             </span>
                           </SelectItem>
                         ))}
