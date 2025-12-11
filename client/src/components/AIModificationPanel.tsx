@@ -79,19 +79,43 @@ IMPORTANT: Your response must be ONLY executable JavaScript code that:
 2. Modifies the 'rows' array (array of arrays)
 3. Returns an object: { headers: newHeaders, rows: newRows }
 
-RULES:
+CRITICAL SYNTAX RULES:
 - Do NOT wrap in a function declaration
 - Do NOT include explanations, comments, or markdown
+- ALWAYS close all opening braces { with closing braces }
+- ALWAYS close all opening parentheses ( with closing parentheses )
+- Verify your code has matching braces before responding
 - Use headers.indexOf() to find column positions
 - Column names may contain spaces, parentheses, slashes - use exact string matching
 - The code has access to 'headers' (array of strings) and 'rows' (array of arrays)
 
-EXAMPLE:
-To change all values in column "Plant Code" to "ABC":
+EXAMPLES:
+
+Example 1 - Change all values in a column:
 const colIndex = headers.indexOf("Plant Code");
 const newRows = rows.map(row => {
   const newRow = [...row];
   newRow[colIndex] = "ABC";
+  return newRow;
+});
+return { headers, rows: newRows };
+
+Example 2 - Conditional modification:
+const colIndex = headers.indexOf("Status");
+const newRows = rows.map(row => {
+  const newRow = [...row];
+  if (newRow[colIndex] === "Active") {
+    newRow[colIndex] = "Inactive";
+  }
+  return newRow;
+});
+return { headers, rows: newRows };
+
+Example 3 - Append to values:
+const colIndex = headers.indexOf("Code");
+const newRows = rows.map(row => {
+  const newRow = [...row];
+  newRow[colIndex] = newRow[colIndex] + "0";
   return newRow;
 });
 return { headers, rows: newRows };`
@@ -130,6 +154,19 @@ Generate the transformation code:`
       code = code.replace(/\}\s*$/m, '');
       
       console.log('Executing AI code:', code);
+      
+      // Validate syntax before execution
+      const openBraces = (code.match(/\{/g) || []).length;
+      const closeBraces = (code.match(/\}/g) || []).length;
+      const openParens = (code.match(/\(/g) || []).length;
+      const closeParens = (code.match(/\)/g) || []).length;
+      
+      if (openBraces !== closeBraces) {
+        throw new Error(`Syntax error: Mismatched braces (${openBraces} opening, ${closeBraces} closing). The AI generated invalid code. Please try rephrasing your instruction.`);
+      }
+      if (openParens !== closeParens) {
+        throw new Error(`Syntax error: Mismatched parentheses (${openParens} opening, ${closeParens} closing). The AI generated invalid code. Please try rephrasing your instruction.`);
+      }
       
       // Execute the transformation with better error handling
       let newHeaders, newRows;
