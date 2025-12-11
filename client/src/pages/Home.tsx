@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Loader2, Upload, UploadCloud, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Eye, FileSpreadsheet, Loader2, Upload, UploadCloud, X } from "lucide-react";
+import { PreviewSection } from "@/components/PreviewSection";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
@@ -27,17 +29,21 @@ const DISPATCH_OPTIONS = [
 export default function Home() {
   const [activeTab, setActiveTab] = useState("mixes");
   const [selectedDispatch, setSelectedDispatch] = useState<string>("");
+  const [customerName, setCustomerName] = useState<string>("");
   const [files, setFiles] = useState<File[]>([]); // Changed from single file to array
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [convertedData, setConvertedData] = useState<any>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [showInlinePreview, setShowInlinePreview] = useState(false);
 
   // File drop handler - supports multiple files
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError(null);
     setSuccess(false);
     setConvertedData(null);
+    setShowInlinePreview(false);
     
     // Filter valid files
     const validFiles = acceptedFiles.filter(file => 
@@ -84,6 +90,7 @@ export default function Home() {
     setFiles(prev => prev.filter((_, i) => i !== index));
     setSuccess(false);
     setConvertedData(null);
+    setShowInlinePreview(false);
   };
 
   // Helper function to read a file as array buffer
@@ -212,7 +219,12 @@ export default function Home() {
     
     const wbout = XLSX.write(convertedData, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
-    const filename = activeTab === "mixes" ? 'MixImport-Converted.xlsx' : 'MaterialImport-Converted.xlsx';
+    
+    // Build filename with customer name if provided
+    const baseFilename = activeTab === "mixes" ? 'MixImport' : 'MaterialImport';
+    const customerPrefix = customerName.trim() ? `${customerName.trim()}-` : '';
+    const filename = `${customerPrefix}${baseFilename}-Converted.xlsx`;
+    
     saveAs(blob, filename);
   };
 
@@ -248,8 +260,9 @@ export default function Home() {
             setError(null);
             setSuccess(false);
             setConvertedData(null);
+            setShowInlinePreview(false);
           }} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-8 p-1 bg-secondary/5 border border-border rounded-xl h-14">
+            <TabsList className="grid w-full grid-cols-3 mb-8 p-1 bg-secondary/5 border border-border rounded-xl h-14">
               <TabsTrigger 
                 value="mixes" 
                 className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-12 transition-all"
@@ -262,17 +275,37 @@ export default function Home() {
               >
                 Material Imports
               </TabsTrigger>
+              <TabsTrigger 
+                value="mix-material" 
+                className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-12 transition-all"
+              >
+                Mix & Material Upload
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="mixes" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-border shadow-sm overflow-hidden">
                 <CardHeader className="bg-secondary/1 border-b border-border pb-6">
                   <CardTitle className="text-xl text-secondary">Configuration</CardTitle>
                   <CardDescription>Select the source dispatch system for your data.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-dark">Dispatch System</label>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-dark">Customer</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter customer name (optional)"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value.slice(0, 16))}
+                        maxLength={16}
+                        className="w-full h-12 text-base"
+                      />
+                      <p className="text-xs text-muted-foreground">Max 16 characters. Will be added to output filename.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-dark">Dispatch System</label>
                     <Select value={selectedDispatch} onValueChange={setSelectedDispatch}>
                       <SelectTrigger className="w-full h-12 text-base bg-white border-border focus:ring-primary/20">
                         <SelectValue placeholder="Select Dispatch System" />
@@ -292,6 +325,7 @@ export default function Home() {
                         ))}
                       </SelectContent>
                     </Select>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -300,7 +334,7 @@ export default function Home() {
                 <CardHeader className="bg-secondary/1 border-b border-border pb-6 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
-                    <CardDescription>Upload the Excel/CSV file containing mix designs.</CardDescription>
+                    <CardDescription>Upload the file containing mix designs.</CardDescription>
                   </div>
                   
                   <div className="flex gap-2">
@@ -396,14 +430,25 @@ export default function Home() {
 
                   <div className="flex items-center justify-end gap-4 pt-2">
                     {success ? (
-                      <Button 
-                        size="lg" 
-                        className="bg-success hover:bg-success2 text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
-                        onClick={handleDownload}
-                      >
-                        <Download className="mr-2 h-5 w-5" />
-                        Download Converted File
-                      </Button>
+                      <>
+                        <Button 
+                          size="lg" 
+                          variant="outline"
+                          className="border-primary text-primary hover:bg-primary/5 shadow-md hover:shadow-lg transition-all"
+                          onClick={() => setShowInlinePreview(!showInlinePreview)}
+                        >
+                          <Eye className="mr-2 h-5 w-5" />
+                          {showInlinePreview ? 'Hide Preview' : 'Preview'}
+                        </Button>
+                        <Button 
+                          size="lg" 
+                          className="bg-success hover:bg-success2 text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
+                          onClick={handleDownload}
+                        >
+                          <Download className="mr-2 h-5 w-5" />
+                          Download Converted File
+                        </Button>
+                      </>
                     ) : (
                       <Button 
                         size="lg" 
@@ -429,17 +474,41 @@ export default function Home() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
+              
+              {/* Inline Preview Section */}
+              {success && showInlinePreview && (
+                <PreviewSection
+                  workbook={convertedData}
+                  title="Mix Import Preview"
+                  onClose={() => setShowInlinePreview(false)}
+                />
+              )}
             </TabsContent>
             
             <TabsContent value="materials" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-border shadow-sm overflow-hidden">
                 <CardHeader className="bg-secondary/1 border-b border-border pb-6">
                   <CardTitle className="text-xl text-secondary">Configuration</CardTitle>
                   <CardDescription>Select the source dispatch system for your data.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-dark">Dispatch System</label>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-dark">Customer</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter customer name (optional)"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value.slice(0, 16))}
+                        maxLength={16}
+                        className="w-full h-12 text-base"
+                      />
+                      <p className="text-xs text-muted-foreground">Max 16 characters. Will be added to output filename.</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-dark">Dispatch System</label>
                     <Select value={selectedDispatch} onValueChange={setSelectedDispatch}>
                       <SelectTrigger className="w-full h-12 text-base bg-white border-border focus:ring-primary/20">
                         <SelectValue placeholder="Select Dispatch System" />
@@ -459,6 +528,7 @@ export default function Home() {
                         ))}
                       </SelectContent>
                     </Select>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -468,7 +538,7 @@ export default function Home() {
                   <div>
                     <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
                     <CardDescription>
-                      Upload material files (up to 5): admix-list, aggregate-list, cement-list, etc.
+                      Upload material files (up to 5).
                     </CardDescription>
                   </div>
                   
@@ -576,14 +646,25 @@ export default function Home() {
 
                   <div className="flex items-center justify-end gap-4 pt-2">
                     {success ? (
-                      <Button 
-                        size="lg" 
-                        className="bg-success hover:bg-success2 text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
-                        onClick={handleDownload}
-                      >
-                        <Download className="mr-2 h-5 w-5" />
-                        Download Converted File
-                      </Button>
+                      <>
+                        <Button 
+                          size="lg" 
+                          variant="outline"
+                          className="border-primary text-primary hover:bg-primary/5 shadow-md hover:shadow-lg transition-all"
+                          onClick={() => setShowInlinePreview(!showInlinePreview)}
+                        >
+                          <Eye className="mr-2 h-5 w-5" />
+                          {showInlinePreview ? 'Hide Preview' : 'Preview'}
+                        </Button>
+                        <Button 
+                          size="lg" 
+                          className="bg-success hover:bg-success2 text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
+                          onClick={handleDownload}
+                        >
+                          <Download className="mr-2 h-5 w-5" />
+                          Download Converted File
+                        </Button>
+                      </>
                     ) : (
                       <Button 
                         size="lg" 
@@ -606,6 +687,35 @@ export default function Home() {
                         )}
                       </Button>
                     )}
+                  </div>
+                </CardContent>
+              </Card>
+              </div>
+              
+              {/* Inline Preview Section */}
+              {success && showInlinePreview && (
+                <PreviewSection
+                  workbook={convertedData}
+                  title="Material Import Preview"
+                  onClose={() => setShowInlinePreview(false)}
+                />
+              )}
+            </TabsContent>
+            
+            <TabsContent value="mix-material" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <Card className="border-border shadow-sm overflow-hidden">
+                <CardContent className="pt-20 pb-20 text-center">
+                  <div className="max-w-md mx-auto space-y-4">
+                    <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto mb-6">
+                      <FileSpreadsheet className="h-10 w-10" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark">Mix & Material Upload</h3>
+                    <p className="text-lg text-muted-foreground">
+                      Coming Soon
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      This feature will allow you to upload both mix and material data simultaneously for streamlined processing.
+                    </p>
                   </div>
                 </CardContent>
               </Card>

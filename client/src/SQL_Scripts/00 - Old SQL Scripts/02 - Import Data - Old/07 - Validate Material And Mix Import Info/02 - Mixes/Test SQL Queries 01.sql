@@ -1,0 +1,2 @@
+Select Distinct MixInfo.QuantityUnitName
+From Data_Import_RJ.dbo.TestImport0000_XML_MixInfo As MixInfo

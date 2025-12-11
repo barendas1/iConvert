@@ -1,0 +1,1 @@
+Select * From CmdTest_RJ.dbo.LOCN

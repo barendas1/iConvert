@@ -1,0 +1,9 @@
+/*
+Delete from dbo.icat
+Delete from dbo.icst
+Delete from dbo.iloc
+Delete from dbo.imlb 
+Delete from dbo.imst
+Delete from dbo.locn
+Delete from dbo.uoms
+*/

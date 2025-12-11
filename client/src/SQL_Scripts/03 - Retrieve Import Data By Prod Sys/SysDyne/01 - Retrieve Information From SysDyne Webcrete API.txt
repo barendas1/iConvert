@@ -1,0 +1,102 @@
+SysDyne Webcrete API Information
+
+The Plant, Material, and Mix Information is retrieved from the SysDyne Webcrete API.  
+The following Information is for the SysDyne Webcrete API.
+
+App ID:
+Quadrel
+
+API Key:
+vlBRLrotR4c3lnlCuchakldojiYuC6OW
+
+API URL:
+Usually
+http://CustomerName.api.concretego.com/webcreteapi.asmx
+or
+http://CustomerName-api.concretego.com/webcreteapi.asmx
+
+User Name:
+From Customer
+
+Password:
+From Customer
+
+
+Webcrete Requests
+
+Item Category Query:
+
+<?webcretexml version="1.0"?>
+<WebcreteXML>
+  <WebcreteXMLMsgsRq>
+    <ItemCategoryQueryRq>
+    </ItemCategoryQueryRq>
+  </WebcreteXMLMsgsRq>
+</WebcreteXML>
+
+
+Item Type Query:
+
+<?webcretexml version="1.0"?>
+<WebcreteXML>
+  <WebcreteXMLMsgsRq>
+    <ItemTypeQueryRq>
+    </ItemTypeQueryRq>
+  </WebcreteXMLMsgsRq>
+</WebcreteXML>
+
+
+Location Query:
+
+<?webcretexml version="1.0"?>
+<WebcreteXML>
+  <WebcreteXMLMsgsRq>
+    <LocationQueryRq>
+    </LocationQueryRq>
+  </WebcreteXMLMsgsRq>
+</WebcreteXML>
+
+
+Plant Query:
+
+<?webcretexml version="1.0"?>
+<WebcreteXML>
+  <WebcreteXMLMsgsRq>
+    <PlantQueryRq>
+    </PlantQueryRq>
+  </WebcreteXMLMsgsRq>
+</WebcreteXML>
+
+
+Material Query:
+
+<?webcretexml version="1.0"?>
+<WebcreteXML>
+  <WebcreteXMLMsgsRq>
+    <ItemQueryRq>
+      <IncludeRetElement>Location</IncludeRetElement>
+      <IncludeRetElement>Cost</IncludeRetElement>
+      <IncludeRetElement>Pricing</IncludeRetElement>
+      <IncludeRetElement>Batching</IncludeRetElement>
+      <IsConstituent>True</IsConstituent>
+    </ItemQueryRq>
+  </WebcreteXMLMsgsRq>
+</WebcreteXML>
+
+
+Mix Query:
+
+<?webcretexml version="1.0"?>
+<WebcreteXML>
+  <WebcreteXMLMsgsRq>
+    <ItemQueryRq>
+      <ItemType>Concrete</ItemType>
+      <IncludeRetElement>Location</IncludeRetElement>
+      <IncludeRetElement>Cost</IncludeRetElement>
+      <IncludeRetElement>Batching</IncludeRetElement>
+      <IncludeRetElement>MixDesign</IncludeRetElement>
+      <IncludeRetElement>Pricing</IncludeRetElement>
+    </ItemQueryRq>
+  </WebcreteXMLMsgsRq>
+</WebcreteXML>
+
