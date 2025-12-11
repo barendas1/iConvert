@@ -220,7 +220,7 @@ Generate the transformation code:`
   return (
     <Card className="border-border shadow-sm overflow-hidden">
       <CardHeader className="bg-primary/5 border-b border-border pb-6">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Sparkles className="h-5 w-5 text-primary" />
           <CardTitle className="text-xl text-secondary">AI Data Modification</CardTitle>
         </div>

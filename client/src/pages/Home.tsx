@@ -269,13 +269,13 @@ export default function Home() {
                 value="mixes" 
                 className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-8 transition-all"
               >
-                Mix Imports
+                Mix Conversion
               </TabsTrigger>
               <TabsTrigger 
                 value="materials" 
                 className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-8 transition-all"
               >
-                Material Imports
+                Material Conversion
               </TabsTrigger>
               <TabsTrigger 
                 value="mix-material" 
@@ -295,7 +295,7 @@ export default function Home() {
                 <CardContent className="pt-6">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-dark">Customer</label>
+                      <label className="text-sm font-medium text-dark">Customer Name</label>
                       <Input
                         type="text"
                         placeholder="Enter customer name (optional)"
