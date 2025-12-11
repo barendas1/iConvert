@@ -8,8 +8,8 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { convertMPAQMaterials } from "../converters/materials/mpaqMaterialsConverter";
-import { convertMPAQMixes } from "../converters/mixes/mpaqMixesConverter";
+import { convertMPAQMaterials } from "../converters/materials/MPAQ";
+import { convertMPAQMixes } from "../converters/mixes/MPAQ";
 
 // Dispatch system options
 const DISPATCH_OPTIONS = [
@@ -42,10 +42,14 @@ export default function Home() {
     if (acceptedFiles.length > 0) {
       const uploadedFile = acceptedFiles[0];
       // Check if it's an Excel file
-      if (uploadedFile.name.endsWith('.xlsx') || uploadedFile.name.endsWith('.xls')) {
+      if (
+        uploadedFile.name.endsWith('.xlsx') ||
+        uploadedFile.name.endsWith('.xls') ||
+        uploadedFile.name.endsWith('.csv')
+      ) {
         setFile(uploadedFile);
       } else {
-        setError("Please upload a valid Excel file (.xlsx or .xls)");
+        setError("Please upload a valid Excel or CSV file (.xlsx, .xls, .csv)");
       }
     }
   }, []);
@@ -53,9 +57,10 @@ export default function Home() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop,
     accept: {
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-      'application/vnd.ms-excel': ['.xls']
-    },
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    'application/vnd.ms-excel': ['.xls'],
+    'text/csv': ['.csv']
+  },
     maxFiles: 1
   });
 
@@ -70,6 +75,35 @@ export default function Home() {
       // Read the uploaded file
       const reader = new FileReader();
       reader.onload = async (e) => {
+        // Detect CSV input
+      if (file.name.toLowerCase().endsWith(".csv")) {
+        const text = new TextDecoder().decode(e.target?.result as ArrayBuffer);
+
+        // Convert CSV → 2D array using XLSX
+        const csvData = XLSX.read(text, { type: "string" });
+        const sheet = csvData.Sheets[csvData.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+        console.log("CSV data loaded:", jsonData.length, "rows");
+
+        let processedData: any[][] = [];
+
+        if (activeTab === "mixes") {
+          processedData = convertMPAQMixes(jsonData);
+        } else {
+          processedData = convertMPAQMaterials(jsonData);
+        }
+
+        // Build workbook for export
+        const newWb = XLSX.utils.book_new();
+        const newWs = XLSX.utils.aoa_to_sheet(processedData);
+        XLSX.utils.book_append_sheet(newWb, newWs, activeTab === "mixes" ? "Mix Import" : "Material Import");
+
+        setConvertedData(newWb);
+        setSuccess(true);
+        setIsProcessing(false);
+        return; // STOP here — do not continue to XLSX logic
+      }
         try {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: 'array' });
@@ -93,7 +127,7 @@ export default function Home() {
           
           // Convert to JSON for processing
           // header: 1 returns array of arrays, which is safer for column indexing
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
           
           console.log("Source data loaded:", jsonData.length, "rows");
           
@@ -101,19 +135,24 @@ export default function Home() {
 
           // Select the appropriate converter
           if (activeTab === "mixes") {
-            if (selectedDispatch === "Command Series") {
+            if (selectedDispatch === "MPAQ") {
               processedData = convertMPAQMixes(jsonData);
             } else {
               throw new Error(`Converter for ${selectedDispatch} is not yet implemented.`);
             }
-          } else {
-             throw new Error("Material imports are not yet supported.");
+          } else if (activeTab === "materials") {
+            if (selectedDispatch === "MPAQ") {
+              processedData = convertMPAQMaterials(jsonData);
+            } else {
+              throw new Error(`Converter for ${selectedDispatch} is not yet implemented.`);
+            }
           }
           
           // Create a new workbook with the processed data
           const newWb = XLSX.utils.book_new();
           const newWs = XLSX.utils.aoa_to_sheet(processedData);
-          XLSX.utils.book_append_sheet(newWb, newWs, "Mix Import");
+          const outputSheetName = activeTab === "mixes" ? "Mix Import" : "Material Import";
+          XLSX.utils.book_append_sheet(newWb, newWs, outputSheetName);
           
           setConvertedData(newWb);
           setSuccess(true);
@@ -138,7 +177,8 @@ export default function Home() {
     // Generate Excel file
     const wbout = XLSX.write(convertedData, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
-    saveAs(blob, 'MixImport-US_Converted.xlsx');
+    const filename = activeTab === "mixes" ? 'MixImport-Converted.xlsx' : 'MaterialImport-Converted.xlsx';
+    saveAs(blob, filename);
   };
 
   return (
@@ -227,7 +267,7 @@ export default function Home() {
                       type="file"
                       id="file-upload"
                       className="hidden"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx,.xls,.csv"
                       onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
                           onDrop([e.target.files[0]]);
@@ -350,16 +390,171 @@ export default function Home() {
               </Card>
             </TabsContent>
             
-            <TabsContent value="materials">
-              <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
-                <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
-                  <FileSpreadsheet className="h-10 w-10 text-muted-foreground" />
-                </div>
-                <h3 className="text-2xl font-bold text-dark">Coming Soon</h3>
-                <p className="text-muted-foreground mt-2 max-w-md">
-                  Material import functionality is currently under development. Please check back later.
-                </p>
-              </div>
+            <TabsContent value="materials" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <Card className="border-border shadow-sm overflow-hidden">
+                <CardHeader className="bg-secondary/1 border-b border-border pb-6">
+                  <CardTitle className="text-xl text-secondary">Configuration</CardTitle>
+                  <CardDescription>Select the source dispatch system for your data.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-dark">Dispatch System</label>
+                    <Select value={selectedDispatch} onValueChange={setSelectedDispatch}>
+                      <SelectTrigger className="w-full h-12 text-base bg-white border-border focus:ring-primary/20">
+                        <SelectValue placeholder="Select Dispatch System" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DISPATCH_OPTIONS.map((option) => (
+                          <SelectItem 
+                            key={option} 
+                            value={option}
+                            disabled={option !== "MPAQ"}
+                            className="cursor-pointer py-3"
+                          >
+                            <span className={cn(option !== "MPAQ" && "opacity-50")}>
+                              {option} {option !== "MPAQ" && "(Coming Soon)"}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-border shadow-sm overflow-hidden">
+                <CardHeader className="bg-secondary/1 border-b border-border pb-6 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
+                    <CardDescription>Upload the Excel file containing material lists (admix, aggregate, cement).</CardDescription>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <input
+                      type="file"
+                      id="file-upload-materials"
+                      className="hidden"
+                      accept=".xlsx,.xls"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          onDrop([e.target.files[0]]);
+                        }
+                      }}
+                    />
+                    <Button 
+                      variant="outline" 
+                      className="border-primary text-primary hover:bg-primary/5 hover:text-primary-hover"
+                      onClick={() => document.getElementById('file-upload-materials')?.click()}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Select File
+                    </Button>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="pt-6 space-y-6">
+                  <div 
+                    {...getRootProps()} 
+                    className={cn(
+                      "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-4 min-h-[200px]",
+                      isDragActive ? "border-primary bg-primary/5 scale-[0.99]" : "border-border hover:border-primary/50 hover:bg-secondary/5",
+                      file ? "bg-secondary/5 border-secondary/30" : ""
+                    )}
+                  >
+                    <input {...getInputProps()} />
+                    
+                    {file ? (
+                      <>
+                        <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center text-success mb-2">
+                          <FileSpreadsheet className="h-8 w-8" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-semibold text-dark">{file.name}</p>
+                          <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(2)} KB</p>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 mt-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFile(null);
+                            setSuccess(false);
+                            setConvertedData(null);
+                          }}
+                        >
+                          Remove File
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-16 h-16 rounded-full bg-secondary/10 flex items-center justify-center text-secondary mb-2">
+                          <UploadCloud className="h-8 w-8" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-medium text-dark">Drag & drop your file here</p>
+                          <p className="text-sm text-muted-foreground mt-1">or click to browse from your computer</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground/70 mt-4">Supported formats: .xlsx, .xls</p>
+                      </>
+                    )}
+                  </div>
+
+                  {error && (
+                    <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-start gap-3 text-destructive animate-in fade-in slide-in-from-top-2">
+                      <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium">Error</p>
+                        <p className="text-sm opacity-90">{error}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {success && (
+                    <div className="bg-success/10 border border-success/20 rounded-lg p-4 flex items-start gap-3 text-success animate-in fade-in slide-in-from-top-2">
+                      <CheckCircle2 className="h-5 w-5 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-medium">Conversion Successful!</p>
+                        <p className="text-sm opacity-90">Your file has been processed and is ready for download.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-4 pt-2">
+                    {success ? (
+                      <Button 
+                        size="lg" 
+                        className="bg-success hover:bg-success2 text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto"
+                        onClick={handleDownload}
+                      >
+                        <Download className="mr-2 h-5 w-5" />
+                        Download Converted File
+                      </Button>
+                    ) : (
+                      <Button 
+                        size="lg" 
+                        className={cn(
+                          "bg-primary hover:bg-primary-hover text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto",
+                          (!file || !selectedDispatch) && "opacity-50 cursor-not-allowed"
+                        )}
+                        disabled={!file || !selectedDispatch || isProcessing}
+                        onClick={handleConvert}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            Convert Data
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>

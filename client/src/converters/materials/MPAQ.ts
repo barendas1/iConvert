@@ -1,19 +1,22 @@
-import * as fs from 'fs';
-import * as XLSX from 'xlsx';
+/**
+ * MPAQ Materials Converter
+ * 
+ * Converts MPAQ material export data (admix, aggregate, cement lists) 
+ * to Command Series import format
+ * 
+ * Expected input: Three sheets or combined data with material types
+ * - Admixtures (admix-list)
+ * - Aggregates (aggregate-list)  
+ * - Cements (cement-list)
+ * 
+ * Rules:
+ * - Duplicate each material for 5 plants: 01, 02, 03, 05, 06
+ * - Set Family Material Type based on source
+ * - Liquid Admixture = Yes for Admixtures, No for others
+ */
 
 // ---------- PLANTS ----------
 const PLANTS = ["01", "02", "03", "05", "06"];
-
-// ---------- RAW MATERIAL STRUCTURE ----------
-const RAW_COLUMNS = [
-    "ID", "Plant Code", "Trade Name", "Material Date", "Family Material Type",
-    "Material Type", "Specific Gravity", "Is Liquid Admixture",
-    "Water Contribution", "Cost", "Cost Units", "Manufacturer",
-    "Manufacturer Source", "Batching Order Number", "Production Item Code",
-    "Production Item Description", "Production Item Short Description",
-    "Production Item Category", "Production Item Category Description",
-    "Production Item Category Short Description", "Batch Panel Code"
-];
 
 // ---------- TEMPLATE STRUCTURE (FINAL FORMAT) ----------
 const TEMPLATE_COLUMNS = [
@@ -39,151 +42,205 @@ const TEMPLATE_COLUMNS = [
     "Batch Panel Code"
 ];
 
-interface MaterialRow {
+interface MaterialData {
     [key: string]: any;
 }
 
-interface RawMaterialRow {
-    ID: string | number;
-    "Plant Code": string;
-    "Trade Name": string;
-    "Material Date": string;
-    "Family Material Type": string;
-    "Material Type": string;
-    "Specific Gravity": number;
-    "Is Liquid Admixture": string;
-    "Water Contribution": string;
-    Cost: string;
-    "Cost Units": string;
-    Manufacturer: string;
-    "Manufacturer Source": string;
-    "Batching Order Number": string;
-    "Production Item Code": string | number;
-    "Production Item Description": string;
-    "Production Item Short Description": string;
-    "Production Item Category": string;
-    "Production Item Category Description": string;
-    "Production Item Category Short Description": string;
-    "Batch Panel Code": string;
+// ---------- Helper Functions ----------
+function getTodayDate(): string {
+    const today = new Date();
+    return `${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}/${today.getFullYear()}`;
 }
 
-// ---------- LOAD CSV FILES ----------
-function loadCSV(filename: string): any[] {
-    const workbook = XLSX.readFile(filename);
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    return XLSX.utils.sheet_to_json(worksheet);
+function safeGet(row: any, col: string): any {
+    return row.hasOwnProperty(col) ? row[col] : "";
+}
+
+function isEmptyValue(val: any): boolean {
+    return val === null || val === undefined || val === "" || 
+           (typeof val === 'number' && isNaN(val));
 }
 
 // ---------- CREATE MATERIAL ROWS ----------
-function createMaterialRows(data: any[], familyType: string): RawMaterialRow[] {
-    const rows: RawMaterialRow[] = [];
+function createMaterialRows(data: MaterialData[], familyType: string): any[][] {
+    const rows: any[][] = [];
+    const materialDate = getTodayDate();
     
     for (const row of data) {
+        // Get ID from first column or specific ID field
+        const matId = row.Id || row.ID || row.id || row[Object.keys(row)[0]];
+        const matName = row.Name || row.name || "";
+        const specificGravity = parseFloat(row.SpecificGravity || row["Specific Gravity"] || "1.0");
+        
+        // Skip if no name
+        if (isEmptyValue(matName)) continue;
+        
         for (const plant of PLANTS) {
-            // Get today's date in MM/DD/YYYY format
-            const today = new Date();
-            const materialDate = `${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}/${today.getFullYear()}`;
-            
-            const newRow: RawMaterialRow = {
-                ID: row[Object.keys(row)[0]], // First column as ID
-                "Plant Code": plant,
-                "Trade Name": row.Name,
-                "Material Date": materialDate,
-                "Family Material Type": familyType,
-                "Material Type": row.Name,
-                "Specific Gravity": parseFloat(row.SpecificGravity),
-                "Is Liquid Admixture": familyType === "Admixture & Fiber" ? "Yes" : "No",
-                "Water Contribution": "",
-                Cost: "",
-                "Cost Units": "",
-                Manufacturer: "",
-                "Manufacturer Source": "",
-                "Batching Order Number": "",
-                "Production Item Code": row[Object.keys(row)[0]],
-                "Production Item Description": row.Name,
-                "Production Item Short Description": row.Name.substring(0, 10),
-                "Production Item Category": familyType,
-                "Production Item Category Description": familyType,
-                "Production Item Category Short Description": familyType.substring(0, 10),
-                "Batch Panel Code": ""
-            };
-            
-            rows.push(newRow);
+            const materialRow = [
+                plant,                                      // Plant Code (Required)
+                matName,                                    // Trade Name (Required)
+                materialDate,                               // Material Date (mm/dd/yyyy)
+                familyType,                                 // Family Material Type (Required)
+                matName,                                    // Material Type (Required)
+                specificGravity,                            // Specific Gravity (Required)
+                familyType === "Admixture & Fiber" ? "Yes" : "No",  // Is Liquid Admixture
+                "",                                         // Water Contribution (%)
+                "",                                         // Cost
+                "",                                         // Cost Units
+                "",                                         // Manufacturer
+                "",                                         // Manufacturer Source
+                "",                                         // Batching Order Number
+                matId,                                      // Production Item Code
+                matName,                                    // Production Item Description
+                matName.substring(0, 10),                   // Production Item Short Description
+                familyType,                                 // Production Item Category
+                familyType,                                 // Production Item Category Description
+                familyType.substring(0, 10),                // Production Item Category Short Description
+                ""                                          // Batch Panel Code
+            ];
+            rows.push(materialRow);
         }
     }
     
     return rows;
 }
 
-// ---------- MAIN PROCESSING ----------
-function processMaterials() {
-    console.log("Loading source files...");
+// ---------- Main conversion function ----------
+export function convertMPAQMaterials(inputData: any[][]): any[][] {
+    console.log("Starting MPAQ Materials conversion...");
+    console.log("Input data rows:", inputData.length);
     
-    // Load source CSV files
-    const admixData = loadCSV('admix-list.csv');
-    const aggregateData = loadCSV('aggregate-list.csv');
-    const cementData = loadCSV('cement-list.csv');
+    if (inputData.length === 0) {
+        throw new Error("Input data is empty");
+    }
     
-    console.log("Creating material rows...");
+    // First row is headers
+    const headers = inputData[0];
+    console.log("Headers:", headers);
     
-    // Create raw materials
-    const rawMaterials: RawMaterialRow[] = [
-        ...createMaterialRows(admixData, "Admixture & Fiber"),
-        ...createMaterialRows(aggregateData, "Aggregate"),
-        ...createMaterialRows(cementData, "Cement")
-    ];
-    
-    // Save intermediate file (optional)
-    const rawWorkbook = XLSX.utils.book_new();
-    const rawWorksheet = XLSX.utils.json_to_sheet(rawMaterials, { header: RAW_COLUMNS });
-    XLSX.utils.book_append_sheet(rawWorkbook, rawWorksheet, "Raw Materials");
-    XLSX.writeFile(rawWorkbook, "Master_Materials_AllPlants_RAW.csv");
-    
-    console.log("Mapping to template format...");
-    
-    // ---------- MAP RAW COLUMNS → TEMPLATE COLUMNS ----------
-    const columnMap: { [key: string]: string } = {
-        "Plant Code": "Plant Code (Required)",
-        "Trade Name": "Trade Name (Required)",
-        "Material Date": "Material Date (mm/dd/yyyy)",
-        "Family Material Type": "Family Material Type (Required)",
-        "Material Type": "Material Type (Required)",
-        "Specific Gravity": "Specific Gravity (Required)",
-        "Is Liquid Admixture": "Is Liquid Admixture (Yes/No)",
-        "Water Contribution": "Water Contribution (%)",
-        "Cost": "Cost",
-        "Cost Units": "Cost Units",
-        "Manufacturer": "Manufacturer",
-        "Manufacturer Source": "Manufacturer Source",
-        "Batching Order Number": "Batching Order Number",
-        "Production Item Code": "Production Item Code",
-        "Production Item Description": "Production Item Description",
-        "Production Item Short Description": "Production Item Short Description",
-        "Production Item Category": "Production Item Category",
-        "Production Item Category Description": "Production Item Category Description",
-        "Production Item Category Short Description": "Production Item Category Short Description",
-        "Batch Panel Code": "Batch Panel Code"
-    };
-    
-    // Create template data
-    const templateData: MaterialRow[] = rawMaterials.map(row => {
-        const newRow: MaterialRow = {};
-        for (const [rawCol, finalCol] of Object.entries(columnMap)) {
-            newRow[finalCol] = row[rawCol as keyof RawMaterialRow];
-        }
-        return newRow;
+    // Convert array of arrays to array of objects
+    const data = inputData.slice(1).map(row => {
+        const obj: any = {};
+        headers.forEach((header: any, index: number) => {
+            obj[header] = row[index];
+        });
+        return obj;
     });
     
-    // ---------- EXPORT AS XLSX ----------
-    console.log("Exporting to Excel...");
-    const templateWorkbook = XLSX.utils.book_new();
-    const templateWorksheet = XLSX.utils.json_to_sheet(templateData, { header: TEMPLATE_COLUMNS });
-    XLSX.utils.book_append_sheet(templateWorkbook, templateWorksheet, "Materials");
-    XLSX.writeFile(templateWorkbook, "Material_Import_Template.xlsx");
+    console.log("Converted to objects:", data.length, "rows");
     
-    console.log("FINAL MATERIAL IMPORT TEMPLATE CREATED: Material_Import_Template.xlsx");
+    // Determine material type based on column names or data patterns
+    // Check if we have specific columns that indicate material type
+    const hasAdmixColumns = headers.some((h: string) => 
+        String(h).toLowerCase().includes('admix') || 
+        String(h).toLowerCase().includes('fiber')
+    );
+    const hasAggregateColumns = headers.some((h: string) => 
+        String(h).toLowerCase().includes('aggregate') || 
+        String(h).toLowerCase().includes('sand') ||
+        String(h).toLowerCase().includes('stone')
+    );
+    const hasCementColumns = headers.some((h: string) => 
+        String(h).toLowerCase().includes('cement') || 
+        String(h).toLowerCase().includes('slag')
+    );
+    
+    // Try to detect material type from data
+    let familyType = "Material"; // default
+    
+    // Check if there's a Type or MaterialType column
+    if (data.length > 0 && data[0].hasOwnProperty('Type')) {
+        familyType = data[0].Type;
+    } else if (data.length > 0 && data[0].hasOwnProperty('MaterialType')) {
+        familyType = data[0].MaterialType;
+    } else if (data.length > 0 && data[0].hasOwnProperty('Family')) {
+        familyType = data[0].Family;
+    } else {
+        // Infer from column names
+        if (hasAdmixColumns) {
+            familyType = "Admixture & Fiber";
+        } else if (hasAggregateColumns) {
+            familyType = "Aggregate";
+        } else if (hasCementColumns) {
+            familyType = "Cement";
+        }
+    }
+    
+    console.log("Detected material family type:", familyType);
+    
+    // Process materials
+    const outRows: any[][] = [];
+    
+    // Add header row
+    outRows.push(TEMPLATE_COLUMNS);
+    
+    // Create material rows
+    const materialRows = createMaterialRows(data, familyType);
+    outRows.push(...materialRows);
+    
+    console.log("Conversion complete. Output rows:", outRows.length - 1); // -1 for header
+    return outRows;
 }
 
-// ---------- ENTRY POINT ----------
-processMaterials();
+/**
+ * Convert multiple material sheets (admix, aggregate, cement)
+ * This is used when the input file has separate sheets for each material type
+ */
+export function convertMPAQMaterialsMultiSheet(
+    admixData: any[][] | null,
+    aggregateData: any[][] | null,
+    cementData: any[][] | null
+): any[][] {
+    console.log("Starting MPAQ Materials multi-sheet conversion...");
+    
+    const outRows: any[][] = [];
+    outRows.push(TEMPLATE_COLUMNS);
+    
+    // Process admixtures
+    if (admixData && admixData.length > 1) {
+        const headers = admixData[0];
+        const data = admixData.slice(1).map(row => {
+            const obj: any = {};
+            headers.forEach((header: any, index: number) => {
+                obj[header] = row[index];
+            });
+            return obj;
+        });
+        const admixRows = createMaterialRows(data, "Admixture & Fiber");
+        outRows.push(...admixRows);
+        console.log("Processed admixtures:", admixRows.length, "rows");
+    }
+    
+    // Process aggregates
+    if (aggregateData && aggregateData.length > 1) {
+        const headers = aggregateData[0];
+        const data = aggregateData.slice(1).map(row => {
+            const obj: any = {};
+            headers.forEach((header: any, index: number) => {
+                obj[header] = row[index];
+            });
+            return obj;
+        });
+        const aggRows = createMaterialRows(data, "Aggregate");
+        outRows.push(...aggRows);
+        console.log("Processed aggregates:", aggRows.length, "rows");
+    }
+    
+    // Process cements
+    if (cementData && cementData.length > 1) {
+        const headers = cementData[0];
+        const data = cementData.slice(1).map(row => {
+            const obj: any = {};
+            headers.forEach((header: any, index: number) => {
+                obj[header] = row[index];
+            });
+            return obj;
+        });
+        const cemRows = createMaterialRows(data, "Cement");
+        outRows.push(...cemRows);
+        console.log("Processed cements:", cemRows.length, "rows");
+    }
+    
+    console.log("Multi-sheet conversion complete. Total output rows:", outRows.length - 1);
+    return outRows;
+}
