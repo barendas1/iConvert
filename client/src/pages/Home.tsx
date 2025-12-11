@@ -3,12 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Loader2, Upload, UploadCloud } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Loader2, Upload, UploadCloud, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { convertMPAQMaterials } from "../converters/materials/MPAQ";
+import { convertMPAQMaterials, convertMPAQMaterialsMultiSheet } from "../converters/materials/MPAQ";
 import { convertMPAQMixes } from "../converters/mixes/MPAQ";
 
 // Dispatch system options
@@ -27,146 +27,182 @@ const DISPATCH_OPTIONS = [
 export default function Home() {
   const [activeTab, setActiveTab] = useState("mixes");
   const [selectedDispatch, setSelectedDispatch] = useState<string>("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]); // Changed from single file to array
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [convertedData, setConvertedData] = useState<any>(null);
 
-  // File drop handler
+  // File drop handler - supports multiple files
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setError(null);
     setSuccess(false);
     setConvertedData(null);
     
-    if (acceptedFiles.length > 0) {
-      const uploadedFile = acceptedFiles[0];
-      // Check if it's an Excel file
-      if (
-        uploadedFile.name.endsWith('.xlsx') ||
-        uploadedFile.name.endsWith('.xls') ||
-        uploadedFile.name.endsWith('.csv')
-      ) {
-        setFile(uploadedFile);
-      } else {
-        setError("Please upload a valid Excel or CSV file (.xlsx, .xls, .csv)");
-      }
+    // Filter valid files
+    const validFiles = acceptedFiles.filter(file => 
+      file.name.endsWith('.xlsx') || 
+      file.name.endsWith('.xls') || 
+      file.name.endsWith('.csv')
+    );
+    
+    if (validFiles.length === 0) {
+      setError("Please upload valid Excel or CSV files (.xlsx, .xls, .csv)");
+      return;
     }
-  }, []);
+    
+    // For mixes tab, only allow 1 file
+    if (activeTab === "mixes" && validFiles.length > 1) {
+      setError("Mix imports only support a single file upload");
+      setFiles([validFiles[0]]);
+      return;
+    }
+    
+    // For materials tab, allow up to 5 files
+    if (activeTab === "materials" && validFiles.length > 5) {
+      setError("Maximum 5 files allowed");
+      setFiles(validFiles.slice(0, 5));
+      return;
+    }
+    
+    setFiles(validFiles);
+  }, [activeTab]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop,
     accept: {
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-    'application/vnd.ms-excel': ['.xls'],
-    'text/csv': ['.csv']
-  },
-    maxFiles: 1
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+      'text/csv': ['.csv']
+    },
+    maxFiles: activeTab === "mixes" ? 1 : 5,
+    multiple: activeTab === "materials"
   });
+
+  // Remove a specific file
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+    setSuccess(false);
+    setConvertedData(null);
+  };
+
+  // Helper function to read a file as array buffer
+  const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as ArrayBuffer);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // Helper function to convert file to 2D array
+  const fileToArray = async (file: File): Promise<any[][]> => {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    
+    if (file.name.toLowerCase().endsWith(".csv")) {
+      const text = new TextDecoder().decode(arrayBuffer);
+      const csvData = XLSX.read(text, { type: "string" });
+      const sheet = csvData.Sheets[csvData.SheetNames[0]];
+      return XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+    } else {
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      // Try to find the data sheet
+      let sheetName = workbook.SheetNames.find(name => 
+        name.toLowerCase().includes('mix') || 
+        name.toLowerCase().includes('material') ||
+        name.toLowerCase().includes('data')
+      );
+      if (!sheetName) {
+        sheetName = workbook.SheetNames.length > 1 ? workbook.SheetNames[1] : workbook.SheetNames[0];
+      }
+      const worksheet = workbook.Sheets[sheetName];
+      return XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+    }
+  };
 
   // Conversion logic
   const handleConvert = async () => {
-    if (!file || !selectedDispatch) return;
+    if (files.length === 0 || !selectedDispatch) return;
     
     setIsProcessing(true);
     setError(null);
 
     try {
-      // Read the uploaded file
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        // Detect CSV input
-      if (file.name.toLowerCase().endsWith(".csv")) {
-        const text = new TextDecoder().decode(e.target?.result as ArrayBuffer);
+      let processedData: any[][] = [];
 
-        // Convert CSV → 2D array using XLSX
-        const csvData = XLSX.read(text, { type: "string" });
-        const sheet = csvData.Sheets[csvData.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-
-        console.log("CSV data loaded:", jsonData.length, "rows");
-
-        let processedData: any[][] = [];
-
-        if (activeTab === "mixes") {
-          processedData = convertMPAQMixes(jsonData);
-        } else {
+      if (activeTab === "mixes") {
+        // Mixes: single file only
+        const jsonData = await fileToArray(files[0]);
+        console.log("Mix data loaded:", jsonData.length, "rows");
+        processedData = convertMPAQMixes(jsonData);
+        
+      } else if (activeTab === "materials") {
+        // Materials: can handle 1-5 files
+        if (files.length === 1) {
+          // Single file - could be combined or single material type
+          const jsonData = await fileToArray(files[0]);
+          console.log("Material data loaded:", jsonData.length, "rows");
           processedData = convertMPAQMaterials(jsonData);
+          
+        } else {
+          // Multiple files - treat as separate material types
+          console.log(`Processing ${files.length} material files...`);
+          
+          // Read all files
+          const fileDataPromises = files.map(file => fileToArray(file));
+          const allFileData = await Promise.all(fileDataPromises);
+          
+          // Try to identify which file is which based on filename
+          let admixData: any[][] | null = null;
+          let aggregateData: any[][] | null = null;
+          let cementData: any[][] | null = null;
+          
+          files.forEach((file, index) => {
+            const fileName = file.name.toLowerCase();
+            const data = allFileData[index];
+            
+            if (fileName.includes('admix') || fileName.includes('fiber')) {
+              admixData = data;
+              console.log("Identified admix file:", file.name);
+            } else if (fileName.includes('aggregate') || fileName.includes('agg')) {
+              aggregateData = data;
+              console.log("Identified aggregate file:", file.name);
+            } else if (fileName.includes('cement') || fileName.includes('cem')) {
+              cementData = data;
+              console.log("Identified cement file:", file.name);
+            } else {
+              // If we can't identify by name, assign in order
+              if (!admixData) {
+                admixData = data;
+                console.log("Assigned to admix (by order):", file.name);
+              } else if (!aggregateData) {
+                aggregateData = data;
+                console.log("Assigned to aggregate (by order):", file.name);
+              } else if (!cementData) {
+                cementData = data;
+                console.log("Assigned to cement (by order):", file.name);
+              }
+            }
+          });
+          
+          processedData = convertMPAQMaterialsMultiSheet(admixData, aggregateData, cementData);
         }
-
-        // Build workbook for export
-        const newWb = XLSX.utils.book_new();
-        const newWs = XLSX.utils.aoa_to_sheet(processedData);
-        XLSX.utils.book_append_sheet(newWb, newWs, activeTab === "mixes" ? "Mix Import" : "Material Import");
-
-        setConvertedData(newWb);
-        setSuccess(true);
-        setIsProcessing(false);
-        return; // STOP here — do not continue to XLSX logic
       }
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: 'array' });
-          
-          // CRITICAL FIX: Select the 'Mixes' sheet if it exists, otherwise try the second sheet, then first
-          // The file has ['Pivot', 'Mixes'], and we want 'Mixes'
-          let sheetName = workbook.SheetNames.find(name => name.toLowerCase().includes('mix'));
-          
-          // Fallback logic if 'Mixes' isn't found by name
-          if (!sheetName) {
-            if (workbook.SheetNames.length > 1) {
-              // Try the second sheet (index 1) as it's likely the data sheet if index 0 is a pivot/cover
-              sheetName = workbook.SheetNames[1];
-            } else {
-              sheetName = workbook.SheetNames[0];
-            }
-          }
-          
-          console.log(`Using sheet: ${sheetName}`);
-          const worksheet = workbook.Sheets[sheetName];
-          
-          // Convert to JSON for processing
-          // header: 1 returns array of arrays, which is safer for column indexing
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
-          
-          console.log("Source data loaded:", jsonData.length, "rows");
-          
-          let processedData: any[][] = [];
 
-          // Select the appropriate converter
-          if (activeTab === "mixes") {
-            if (selectedDispatch === "MPAQ") {
-              processedData = convertMPAQMixes(jsonData);
-            } else {
-              throw new Error(`Converter for ${selectedDispatch} is not yet implemented.`);
-            }
-          } else if (activeTab === "materials") {
-            if (selectedDispatch === "MPAQ") {
-              processedData = convertMPAQMaterials(jsonData);
-            } else {
-              throw new Error(`Converter for ${selectedDispatch} is not yet implemented.`);
-            }
-          }
-          
-          // Create a new workbook with the processed data
-          const newWb = XLSX.utils.book_new();
-          const newWs = XLSX.utils.aoa_to_sheet(processedData);
-          const outputSheetName = activeTab === "mixes" ? "Mix Import" : "Material Import";
-          XLSX.utils.book_append_sheet(newWb, newWs, outputSheetName);
-          
-          setConvertedData(newWb);
-          setSuccess(true);
-        } catch (err: any) {
-          console.error("Conversion error:", err);
-          setError(err.message || "Error processing file. Please check the file format.");
-        } finally {
-          setIsProcessing(false);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } catch (err) {
-      console.error(err);
-      setError("An unexpected error occurred.");
+      // Create workbook for export
+      const newWb = XLSX.utils.book_new();
+      const newWs = XLSX.utils.aoa_to_sheet(processedData);
+      const outputSheetName = activeTab === "mixes" ? "Mix Import" : "Material Import";
+      XLSX.utils.book_append_sheet(newWb, newWs, outputSheetName);
+      
+      setConvertedData(newWb);
+      setSuccess(true);
+      
+    } catch (err: any) {
+      console.error("Conversion error:", err);
+      setError(err.message || "Error processing file(s). Please check the file format.");
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -174,7 +210,6 @@ export default function Home() {
   const handleDownload = () => {
     if (!convertedData) return;
     
-    // Generate Excel file
     const wbout = XLSX.write(convertedData, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/octet-stream' });
     const filename = activeTab === "mixes" ? 'MixImport-Converted.xlsx' : 'MaterialImport-Converted.xlsx';
@@ -203,11 +238,17 @@ export default function Home() {
           <div className="mb-8 text-center">
             <h2 className="text-3xl font-bold text-dark mb-2">Import & Convert Data</h2>
             <p className="text-muted-foreground">
-              Upload your customer mix designs and convert them to the standard import format.
+              Upload your customer data and convert to the standard import format.
             </p>
           </div>
 
-          <Tabs defaultValue="mixes" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs defaultValue="mixes" value={activeTab} onValueChange={(val) => {
+            setActiveTab(val);
+            setFiles([]); // Clear files when switching tabs
+            setError(null);
+            setSuccess(false);
+            setConvertedData(null);
+          }} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 p-1 bg-secondary/5 border border-border rounded-xl h-14">
               <TabsTrigger 
                 value="mixes" 
@@ -259,7 +300,7 @@ export default function Home() {
                 <CardHeader className="bg-secondary/1 border-b border-border pb-6 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
-                    <CardDescription>Upload the Excel file containing mix designs.</CardDescription>
+                    <CardDescription>Upload the Excel/CSV file containing mix designs.</CardDescription>
                   </div>
                   
                   <div className="flex gap-2">
@@ -270,7 +311,7 @@ export default function Home() {
                       accept=".xlsx,.xls,.csv"
                       onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
-                          onDrop([e.target.files[0]]);
+                          onDrop(Array.from(e.target.files));
                         }
                       }}
                     />
@@ -291,19 +332,19 @@ export default function Home() {
                     className={cn(
                       "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-4 min-h-[200px]",
                       isDragActive ? "border-primary bg-primary/5 scale-[0.99]" : "border-border hover:border-primary/50 hover:bg-secondary/5",
-                      file ? "bg-secondary/5 border-secondary/30" : ""
+                      files.length > 0 ? "bg-secondary/5 border-secondary/30" : ""
                     )}
                   >
                     <input {...getInputProps()} />
                     
-                    {file ? (
+                    {files.length > 0 ? (
                       <>
                         <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center text-success mb-2">
                           <FileSpreadsheet className="h-8 w-8" />
                         </div>
                         <div>
-                          <p className="text-lg font-semibold text-dark">{file.name}</p>
-                          <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(2)} KB</p>
+                          <p className="text-lg font-semibold text-dark">{files[0].name}</p>
+                          <p className="text-sm text-muted-foreground">{(files[0].size / 1024).toFixed(2)} KB</p>
                         </div>
                         <Button 
                           variant="ghost" 
@@ -311,7 +352,7 @@ export default function Home() {
                           className="text-destructive hover:text-destructive hover:bg-destructive/10 mt-2"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setFile(null);
+                            setFiles([]);
                             setSuccess(false);
                             setConvertedData(null);
                           }}
@@ -328,7 +369,7 @@ export default function Home() {
                           <p className="text-lg font-medium text-dark">Drag & drop your file here</p>
                           <p className="text-sm text-muted-foreground mt-1">or click to browse from your computer</p>
                         </div>
-                        <p className="text-xs text-muted-foreground/70 mt-4">Supported formats: .xlsx, .xls</p>
+                        <p className="text-xs text-muted-foreground/70 mt-4">Supported formats: .xlsx, .xls, .csv</p>
                       </>
                     )}
                   </div>
@@ -368,9 +409,9 @@ export default function Home() {
                         size="lg" 
                         className={cn(
                           "bg-primary hover:bg-primary-hover text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto",
-                          (!file || !selectedDispatch) && "opacity-50 cursor-not-allowed"
+                          (files.length === 0 || !selectedDispatch) && "opacity-50 cursor-not-allowed"
                         )}
-                        disabled={!file || !selectedDispatch || isProcessing}
+                        disabled={files.length === 0 || !selectedDispatch || isProcessing}
                         onClick={handleConvert}
                       >
                         {isProcessing ? (
@@ -426,7 +467,9 @@ export default function Home() {
                 <CardHeader className="bg-secondary/1 border-b border-border pb-6 flex flex-row items-center justify-between">
                   <div>
                     <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
-                    <CardDescription>Upload the Excel file containing material lists (admix, aggregate, cement).</CardDescription>
+                    <CardDescription>
+                      Upload material files (up to 5): admix-list, aggregate-list, cement-list, etc.
+                    </CardDescription>
                   </div>
                   
                   <div className="flex gap-2">
@@ -434,10 +477,11 @@ export default function Home() {
                       type="file"
                       id="file-upload-materials"
                       className="hidden"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx,.xls,.csv"
+                      multiple
                       onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
-                          onDrop([e.target.files[0]]);
+                          onDrop(Array.from(e.target.files));
                         }
                       }}
                     />
@@ -447,7 +491,7 @@ export default function Home() {
                       onClick={() => document.getElementById('file-upload-materials')?.click()}
                     >
                       <Upload className="mr-2 h-4 w-4" />
-                      Select File
+                      Select Files
                     </Button>
                   </div>
                 </CardHeader>
@@ -458,33 +502,41 @@ export default function Home() {
                     className={cn(
                       "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-4 min-h-[200px]",
                       isDragActive ? "border-primary bg-primary/5 scale-[0.99]" : "border-border hover:border-primary/50 hover:bg-secondary/5",
-                      file ? "bg-secondary/5 border-secondary/30" : ""
+                      files.length > 0 ? "bg-secondary/5 border-secondary/30" : ""
                     )}
                   >
                     <input {...getInputProps()} />
                     
-                    {file ? (
+                    {files.length > 0 ? (
                       <>
                         <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center text-success mb-2">
                           <FileSpreadsheet className="h-8 w-8" />
                         </div>
-                        <div>
-                          <p className="text-lg font-semibold text-dark">{file.name}</p>
-                          <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(2)} KB</p>
+                        <div className="w-full space-y-2">
+                          <p className="text-lg font-semibold text-dark">{files.length} file(s) selected</p>
+                          {files.map((file, index) => (
+                            <div key={index} className="flex items-center justify-between bg-white rounded-lg p-3 border border-border">
+                              <div className="flex items-center gap-3">
+                                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+                                <div className="text-left">
+                                  <p className="text-sm font-medium text-dark">{file.name}</p>
+                                  <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(2)} KB</p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeFile(index);
+                                }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 mt-2"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFile(null);
-                            setSuccess(false);
-                            setConvertedData(null);
-                          }}
-                        >
-                          Remove File
-                        </Button>
                       </>
                     ) : (
                       <>
@@ -492,10 +544,12 @@ export default function Home() {
                           <UploadCloud className="h-8 w-8" />
                         </div>
                         <div>
-                          <p className="text-lg font-medium text-dark">Drag & drop your file here</p>
+                          <p className="text-lg font-medium text-dark">Drag & drop your files here</p>
                           <p className="text-sm text-muted-foreground mt-1">or click to browse from your computer</p>
                         </div>
-                        <p className="text-xs text-muted-foreground/70 mt-4">Supported formats: .xlsx, .xls</p>
+                        <p className="text-xs text-muted-foreground/70 mt-4">
+                          Supported formats: .xlsx, .xls, .csv • Maximum 5 files
+                        </p>
                       </>
                     )}
                   </div>
@@ -515,7 +569,7 @@ export default function Home() {
                       <CheckCircle2 className="h-5 w-5 mt-0.5 shrink-0" />
                       <div>
                         <p className="font-medium">Conversion Successful!</p>
-                        <p className="text-sm opacity-90">Your file has been processed and is ready for download.</p>
+                        <p className="text-sm opacity-90">Your files have been processed and are ready for download.</p>
                       </div>
                     </div>
                   )}
@@ -535,9 +589,9 @@ export default function Home() {
                         size="lg" 
                         className={cn(
                           "bg-primary hover:bg-primary-hover text-white shadow-md hover:shadow-lg transition-all w-full sm:w-auto",
-                          (!file || !selectedDispatch) && "opacity-50 cursor-not-allowed"
+                          (files.length === 0 || !selectedDispatch) && "opacity-50 cursor-not-allowed"
                         )}
-                        disabled={!file || !selectedDispatch || isProcessing}
+                        disabled={files.length === 0 || !selectedDispatch || isProcessing}
                         onClick={handleConvert}
                       >
                         {isProcessing ? (
