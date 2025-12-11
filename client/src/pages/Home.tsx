@@ -237,9 +237,9 @@ export default function Home() {
         <div className="container py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-sm">
-              iC
+              iM
             </div>
-            <h1 className="text-2xl font-bold text-dark tracking-tight">iConvert</h1>
+            <h1 className="text-2xl font-bold text-dark tracking-tight">iMigrate</h1>
           </div>
           <div className="text-sm text-muted-foreground font-medium">
             Data Migration Tool
@@ -250,9 +250,9 @@ export default function Home() {
       <main className="container mt-8">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8 text-center">
-            <h2 className="text-3xl font-bold text-dark mb-2">Import & Convert Data</h2>
+            <h2 className="text-3xl font-bold text-dark mb-2">Import, Convert, & Upload Data</h2>
             <p className="text-muted-foreground">
-              Upload your customer data and convert to the standard import format.
+              Upload exported customer mixes and materials to convert into Quadrel standard import format.
             </p>
           </div>
 
@@ -264,7 +264,7 @@ export default function Home() {
             setConvertedData(null);
             setShowInlinePreview(false);
           }} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-4 p-1 bg-secondary/5 border border-border rounded-xl h-12">
+            <TabsList className="grid w-full grid-cols-3 bg-secondary/20 p-1 rounded-xl mb-6 h-auto">
               <TabsTrigger 
                 value="mixes" 
                 className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-8 transition-all"
@@ -286,15 +286,40 @@ export default function Home() {
             </TabsList>
 
             <TabsContent value="mixes" className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card className="border-border shadow-sm overflow-hidden">
-                <CardHeader className="bg-secondary/1 border-b border-border pb-6">
-                  <CardTitle className="text-xl text-secondary">Configuration</CardTitle>
-                  <CardDescription>Select the source dispatch system for your data.</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
+                <CardHeader className="bg-secondary/1 border-b border-border pb-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div className="flex-1">
+                      <CardTitle className="text-xl text-secondary mb-1">Mix Conversion</CardTitle>
+                      <CardDescription>Upload the Excel/CSV file containing mix designs.</CardDescription>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        id="file-upload"
+                        className="hidden"
+                        accept=".xlsx,.xls,.csv"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            onDrop(Array.from(e.target.files));
+                          }
+                        }}
+                      />
+                      <Button 
+                        variant="outline" 
+                        className="border-primary text-primary hover:bg-primary/5 hover:text-primary-hover"
+                        onClick={() => document.getElementById('file-upload')?.click()}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Select File
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Configuration Fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-border">
+                    <div className="space-y-1.5">
                       <label className="text-sm font-medium text-dark">Customer Name</label>
                       <Input
                         type="text"
@@ -302,63 +327,32 @@ export default function Home() {
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value.slice(0, 16))}
                         maxLength={16}
-                        className="w-full h-12 text-base"
+                        className="w-full h-10 text-base"
                       />
                       <p className="text-xs text-muted-foreground">Max 16 characters. Will be added to output filename.</p>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <label className="text-sm font-medium text-dark">Dispatch System</label>
-                    <Select value={selectedDispatch} onValueChange={setSelectedDispatch}>
-                      <SelectTrigger className="w-full h-12 text-base bg-white border-border focus:ring-primary/20">
-                        <SelectValue placeholder="Select Dispatch System" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DISPATCH_OPTIONS.map((option) => (
-                          <SelectItem 
-                            key={option} 
-                            value={option}
-                            disabled={option !== "MPAQ"}
-                            className="cursor-pointer py-3"
-                          >
-                            <span className={cn(option !== "MPAQ" && "opacity-50")}>
-                              {option} {option !== "MPAQ" && "(Coming Soon)"}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Select value={selectedDispatch} onValueChange={setSelectedDispatch}>
+                        <SelectTrigger className="w-full h-10 text-base bg-white border-border focus:ring-primary/20">
+                          <SelectValue placeholder="Select Dispatch System" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DISPATCH_OPTIONS.map((option) => (
+                            <SelectItem 
+                              key={option} 
+                              value={option}
+                              disabled={option !== "MPAQ"}
+                              className="cursor-pointer py-3"
+                            >
+                              <span className={cn(option !== "MPAQ" && "opacity-50")}>
+                                {option} {option !== "MPAQ" && "(Coming Soon)"}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border shadow-sm overflow-hidden">
-                <CardHeader className="bg-secondary/1 border-b border-border pb-6 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
-                    <CardDescription>Upload the Excel/CSV file containing mix designs.</CardDescription>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <input
-                      type="file"
-                      id="file-upload"
-                      className="hidden"
-                      accept=".xlsx,.xls,.csv"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          onDrop(Array.from(e.target.files));
-                        }
-                      }}
-                    />
-                    <Button 
-                      variant="outline" 
-                      className="border-primary text-primary hover:bg-primary/5 hover:text-primary-hover"
-                      onClick={() => document.getElementById('file-upload')?.click()}
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      Select File
-                    </Button>
                   </div>
                 </CardHeader>
                 
@@ -366,7 +360,7 @@ export default function Home() {
                   <div 
                     {...getRootProps()} 
                     className={cn(
-                      "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-4 min-h-[200px]",
+                      "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-3 min-h-[180px]",
                       isDragActive ? "border-primary bg-primary/5 scale-[0.99]" : "border-border hover:border-primary/50 hover:bg-secondary/5",
                       files.length > 0 ? "bg-secondary/5 border-secondary/30" : ""
                     )}
@@ -375,8 +369,8 @@ export default function Home() {
                     
                     {files.length > 0 ? (
                       <>
-                        <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center text-success mb-2">
-                          <FileSpreadsheet className="h-8 w-8" />
+                        <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center text-success">
+                          <FileSpreadsheet className="h-7 w-7" />
                         </div>
                         <div>
                           <p className="text-lg font-semibold text-dark">{files[0].name}</p>
@@ -385,7 +379,7 @@ export default function Home() {
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 mt-2"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={(e) => {
                             e.stopPropagation();
                             setFiles([]);
@@ -398,19 +392,19 @@ export default function Home() {
                       </>
                     ) : (
                       <>
-                        <div className="w-16 h-16 rounded-full bg-secondary/10 flex items-center justify-center text-secondary mb-2">
-                          <UploadCloud className="h-8 w-8" />
+                        <div className="w-14 h-14 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+                          <UploadCloud className="h-7 w-7" />
                         </div>
                         <div>
                           <p className="text-lg font-medium text-dark">Drag & drop your file here</p>
                           <p className="text-sm text-muted-foreground mt-1">or click to browse from your computer</p>
                         </div>
-                        <p className="text-xs text-muted-foreground/70 mt-4">Supported formats: .xlsx, .xls, .csv</p>
+                        <p className="text-xs text-muted-foreground/70">Supported formats: .xlsx, .xls, .csv</p>
                       </>
                     )}
                     
                     {error && (
-                      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-start gap-3 text-destructive animate-in fade-in slide-in-from-top-2 mt-4">
+                      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-start gap-3 text-destructive animate-in fade-in slide-in-from-top-2 mt-2 w-full">
                         <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
                         <div>
                           <p className="font-medium">Error</p>
@@ -420,7 +414,7 @@ export default function Home() {
                     )}
 
                     {success && (
-                      <div className="bg-success/10 border border-success/20 rounded-lg p-4 flex items-start gap-3 text-success animate-in fade-in slide-in-from-top-2 mt-4">
+                      <div className="bg-success/10 border border-success/20 rounded-lg p-3 flex items-start gap-3 text-success animate-in fade-in slide-in-from-top-2 mt-2 w-full">
                         <CheckCircle2 className="h-5 w-5 mt-0.5 shrink-0" />
                         <div>
                           <p className="font-medium">Conversion Successful!</p>
@@ -429,7 +423,7 @@ export default function Home() {
                       </div>
                     )}
 
-                    <div className="flex items-center justify-end gap-4 pt-4 mt-4">
+                    <div className="flex items-center justify-end gap-3 pt-3 mt-2 w-full">
                     {success ? (
                       <>
                         <Button 
@@ -485,7 +479,6 @@ export default function Home() {
                   </div>
                 </CardContent>
               </Card>
-              </div>
               
               {/* Inline Preview Section */}
               {success && showInlinePreview && (
@@ -506,82 +499,74 @@ export default function Home() {
             </TabsContent>
             
             <TabsContent value="materials" className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card className="border-border shadow-sm overflow-hidden">
-                <CardHeader className="bg-secondary/1 border-b border-border pb-6">
-                  <CardTitle className="text-xl text-secondary">Configuration</CardTitle>
-                  <CardDescription>Select the source dispatch system for your data.</CardDescription>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-dark">Customer</label>
+                <CardHeader className="bg-secondary/1 border-b border-border pb-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div className="flex-1">
+                      <CardTitle className="text-xl text-secondary mb-1">Material Conversion</CardTitle>
+                      <CardDescription>Upload material files (up to 5).</CardDescription>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <input
+                        type="file"
+                        id="file-upload-materials"
+                        className="hidden"
+                        accept=".xlsx,.xls,.csv"
+                        multiple
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            onDrop(Array.from(e.target.files));
+                          }
+                        }}
+                      />
+                      <Button 
+                        variant="outline" 
+                        className="border-primary text-primary hover:bg-primary/5 hover:text-primary-hover"
+                        onClick={() => document.getElementById('file-upload-materials')?.click()}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Select Files
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Configuration Fields */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 pt-4 border-t border-border">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium text-dark">Customer Name</label>
                       <Input
                         type="text"
                         placeholder="Enter customer name (optional)"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value.slice(0, 16))}
                         maxLength={16}
-                        className="w-full h-12 text-base"
+                        className="w-full h-10 text-base"
                       />
                       <p className="text-xs text-muted-foreground">Max 16 characters. Will be added to output filename.</p>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <label className="text-sm font-medium text-dark">Dispatch System</label>
-                    <Select value={selectedDispatch} onValueChange={setSelectedDispatch}>
-                      <SelectTrigger className="w-full h-12 text-base bg-white border-border focus:ring-primary/20">
-                        <SelectValue placeholder="Select Dispatch System" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DISPATCH_OPTIONS.map((option) => (
-                          <SelectItem 
-                            key={option} 
-                            value={option}
-                            disabled={option !== "MPAQ"}
-                            className="cursor-pointer py-3"
-                          >
-                            <span className={cn(option !== "MPAQ" && "opacity-50")}>
-                              {option} {option !== "MPAQ" && "(Coming Soon)"}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Select value={selectedDispatch} onValueChange={setSelectedDispatch}>
+                        <SelectTrigger className="w-full h-10 text-base bg-white border-border focus:ring-primary/20">
+                          <SelectValue placeholder="Select Dispatch System" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DISPATCH_OPTIONS.map((option) => (
+                            <SelectItem 
+                              key={option} 
+                              value={option}
+                              disabled={option !== "MPAQ"}
+                              className="cursor-pointer py-3"
+                            >
+                              <span className={cn(option !== "MPAQ" && "opacity-50")}>
+                                {option} {option !== "MPAQ" && "(Coming Soon)"}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border shadow-sm overflow-hidden">
-                <CardHeader className="bg-secondary/1 border-b border-border pb-6 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-xl text-secondary">File Upload</CardTitle>
-                    <CardDescription>
-                      Upload material files (up to 5).
-                    </CardDescription>
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    <input
-                      type="file"
-                      id="file-upload-materials"
-                      className="hidden"
-                      accept=".xlsx,.xls,.csv"
-                      multiple
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          onDrop(Array.from(e.target.files));
-                        }
-                      }}
-                    />
-                    <Button 
-                      variant="outline" 
-                      className="border-primary text-primary hover:bg-primary/5 hover:text-primary-hover"
-                      onClick={() => document.getElementById('file-upload-materials')?.click()}
-                    >
-                      <Upload className="mr-2 h-4 w-4" />
-                      Select Files
-                    </Button>
                   </div>
                 </CardHeader>
                 
@@ -589,7 +574,7 @@ export default function Home() {
                   <div 
                     {...getRootProps()} 
                     className={cn(
-                      "border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-4 min-h-[200px]",
+                      "border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center gap-3 min-h-[180px]",
                       isDragActive ? "border-primary bg-primary/5 scale-[0.99]" : "border-border hover:border-primary/50 hover:bg-secondary/5",
                       files.length > 0 ? "bg-secondary/5 border-secondary/30" : ""
                     )}
@@ -598,13 +583,13 @@ export default function Home() {
                     
                     {files.length > 0 ? (
                       <>
-                        <div className="w-16 h-16 rounded-full bg-success/10 flex items-center justify-center text-success mb-2">
-                          <FileSpreadsheet className="h-8 w-8" />
+                        <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center text-success">
+                          <FileSpreadsheet className="h-7 w-7" />
                         </div>
                         <div className="w-full space-y-2">
                           <p className="text-lg font-semibold text-dark">{files.length} file(s) selected</p>
                           {files.map((file, index) => (
-                            <div key={index} className="flex items-center justify-between bg-white rounded-lg p-3 border border-border">
+                            <div key={index} className="flex items-center justify-between bg-white rounded-lg p-2.5 border border-border">
                               <div className="flex items-center gap-3">
                                 <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
                                 <div className="text-left">
@@ -629,21 +614,21 @@ export default function Home() {
                       </>
                     ) : (
                       <>
-                        <div className="w-16 h-16 rounded-full bg-secondary/10 flex items-center justify-center text-secondary mb-2">
-                          <UploadCloud className="h-8 w-8" />
+                        <div className="w-14 h-14 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+                          <UploadCloud className="h-7 w-7" />
                         </div>
                         <div>
                           <p className="text-lg font-medium text-dark">Drag & drop your files here</p>
                           <p className="text-sm text-muted-foreground mt-1">or click to browse from your computer</p>
                         </div>
-                        <p className="text-xs text-muted-foreground/70 mt-4">
+                        <p className="text-xs text-muted-foreground/70">
                           Supported formats: .xlsx, .xls, .csv • Maximum 5 files
                         </p>
                       </>
                     )}
                     
                     {error && (
-                      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 flex items-start gap-3 text-destructive animate-in fade-in slide-in-from-top-2 mt-4">
+                      <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-start gap-3 text-destructive animate-in fade-in slide-in-from-top-2 mt-2 w-full">
                         <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
                         <div>
                           <p className="font-medium">Error</p>
@@ -653,7 +638,7 @@ export default function Home() {
                     )}
 
                     {success && (
-                      <div className="bg-success/10 border border-success/20 rounded-lg p-4 flex items-start gap-3 text-success animate-in fade-in slide-in-from-top-2 mt-4">
+                      <div className="bg-success/10 border border-success/20 rounded-lg p-3 flex items-start gap-3 text-success animate-in fade-in slide-in-from-top-2 mt-2 w-full">
                         <CheckCircle2 className="h-5 w-5 mt-0.5 shrink-0" />
                         <div>
                           <p className="font-medium">Conversion Successful!</p>
@@ -662,7 +647,7 @@ export default function Home() {
                       </div>
                     )}
 
-                    <div className="flex items-center justify-end gap-4 pt-4 mt-4">
+                    <div className="flex items-center justify-end gap-3 pt-3 mt-2 w-full">
                     {success ? (
                       <>
                         <Button 
@@ -718,7 +703,6 @@ export default function Home() {
                   </div>
                 </CardContent>
               </Card>
-              </div>
               
               {/* Inline Preview Section */}
               {success && showInlinePreview && (
