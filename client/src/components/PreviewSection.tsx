@@ -28,7 +28,6 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
 
   const rowsPerPage = 100;
 
-  // Auto-refresh preview when workbook changes
   useEffect(() => {
     if (workbook) {
       const sheetName = workbook.SheetNames[0];
@@ -40,18 +39,15 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
 
   if (!workbook) return null;
 
-  // Get headers (first row) and rows (rest)
   const headers = data[0] || [];
   const allRows = data.slice(1);
   const totalRows = allRows.length;
   const totalPages = Math.ceil(totalRows / rowsPerPage);
 
-  // Get current page rows
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
   const rows = allRows.slice(startIndex, endIndex);
 
-  // Handle column resize
   const handleMouseDown = (colIndex: number, e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.pageX;
@@ -72,7 +68,6 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
     document.addEventListener('mouseup', handleMouseUp);
   };
 
-  // Handle cell edit
   const handleCellClick = (rowIndex: number, colIndex: number) => {
     const actualRowIndex = startIndex + rowIndex;
     setEditingCell({ row: actualRowIndex, col: colIndex });
@@ -139,20 +134,26 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
         )}
 
         {/* Scrollable Table */}
-        <div className="h-[500px] w-full rounded-lg border overflow-auto">
-          <Table className="min-w-full">
-            
-            {/* Sticky Header */}
-            <TableHeader className="bg-card sticky top-0 z-20 shadow-sm">
+        {/* Make this the explicit scrolling boundary (relative + overflow-y-auto) */}
+        <div className="h-[500px] w-full rounded-lg border relative overflow-y-auto">
+          {/* Table is placed directly inside the scrolling container */}
+          {/* Use table-fixed so column widths behave predictably with sticky THs */}
+          <Table className="min-w-full table-fixed" style={{ tableLayout: 'fixed' }}>
+            {/* Keep the header wrapper for semantics but put sticky on each TH */}
+            <TableHeader>
               <TableRow>
                 {headers.map((header: any, index: number) => (
                   <TableHead
                     key={index}
-                    className="font-semibold text-dark relative group border-r border-border last:border-r-0 bg-card"
+                    // sticky placed on each header cell (th)
+                    className="sticky top-0 z-20 bg-card font-semibold text-dark relative group border-r border-border last:border-r-0"
                     style={{
                       width: columnWidths[index] || 150,
                       minWidth: columnWidths[index] || 150,
                       maxWidth: columnWidths[index] || 150,
+                      // ensure th stays above and paints its background
+                      // (these inline styles help with some browser repaint issues)
+                      boxSizing: 'border-box',
                     }}
                   >
                     <div className="flex flex-col items-center justify-center text-center whitespace-pre-wrap break-words leading-tight py-2">
@@ -182,6 +183,7 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
                           width: columnWidths[colIndex] || 150,
                           minWidth: columnWidths[colIndex] || 150,
                           maxWidth: columnWidths[colIndex] || 150,
+                          boxSizing: 'border-box',
                         }}
                       >
                         {isEditing ? (
@@ -200,6 +202,7 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
                             style={{
                               overflow: "hidden",
                               textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
                           >
                             {row[colIndex] !== undefined && row[colIndex] !== null
@@ -213,7 +216,6 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
                 </TableRow>
               ))}
             </TableBody>
-
           </Table>
         </div>
 
