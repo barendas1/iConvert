@@ -144,12 +144,12 @@ export function PreviewSection({ workbook, title, onClose, onDataChange, childre
         <div className="h-[500px] w-full rounded-lg border overflow-auto">
           <div className="inline-block min-w-full">
             <Table>
-              <TableHeader className="bg-secondary/10 sticky top-0 z-10">
+              <TableHeader className="bg-card sticky top-0 z-10 shadow-sm">
                 <TableRow>
                   {headers.map((header: any, index: number) => (
                     <TableHead 
                       key={index} 
-                      className="font-semibold text-dark relative group border-r border-border last:border-r-0"
+                      className="font-semibold text-dark relative group border-r border-border last:border-r-0 bg-card"
                       style={{ 
                         width: columnWidths[index] || 150,
                         minWidth: columnWidths[index] || 150,
