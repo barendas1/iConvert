@@ -155,6 +155,8 @@ function createMaterialsLookup(materialsData: any[][]): Map<string, string> {
     
     // First row is headers
     const headers = materialsData[0];
+    console.log("Materials file headers:", headers);
+    
     const materialTypeIndex = headers.findIndex((h: any) => 
         String(h).includes('Material Type') && String(h).includes('Required')
     );
@@ -162,8 +164,12 @@ function createMaterialsLookup(materialsData: any[][]): Map<string, string> {
         String(h).includes('Production Item Code')
     );
     
+    console.log(`Found Material Type column at index: ${materialTypeIndex}`);
+    console.log(`Found Production Item Code column at index: ${productionCodeIndex}`);
+    
     if (materialTypeIndex === -1 || productionCodeIndex === -1) {
         console.warn("Could not find required columns in materials file");
+        console.warn("Looking for: 'Material Type (Required)' and 'Production Item Code'");
         return lookup;
     }
     
@@ -182,6 +188,7 @@ function createMaterialsLookup(materialsData: any[][]): Map<string, string> {
     }
     
     console.log(`Created materials lookup with ${lookup.size} entries`);
+    console.log("Sample lookup entries:", Array.from(lookup.entries()).slice(0, 10));
     return lookup;
 }
 
