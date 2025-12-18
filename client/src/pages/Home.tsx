@@ -21,14 +21,15 @@ const DISPATCH_OPTIONS = [
   "Command Series", 
   "Integra", 
   "Jonel", 
-  "MPAQ", 
+  "MPAQ",
+  "Sarjeants",
   "Simma", 
   "SysDyne", 
   "WMC"
 ];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("mixes");
+  const [activeTab, setActiveTab] = useState("materials");
   const [selectedDispatch, setSelectedDispatch] = useState<string>("");
   const [customerName, setCustomerName] = useState<string>("");
   const [files, setFiles] = useState<File[]>([]); // Changed from single file to array
@@ -58,10 +59,10 @@ export default function Home() {
       return;
     }
     
-    // For mixes tab, only allow 1 file
-    if (activeTab === "mixes" && validFiles.length > 1) {
-      setError("Mix imports only support a single file upload");
-      setFiles([validFiles[0]]);
+    // For mixes tab, allow 1-2 files (2 for Sarjeants: mix file + materials lookup)
+    if (activeTab === "mixes" && validFiles.length > 2) {
+      setError("Mix imports support up to 2 files (mix file + materials lookup for Sarjeants)");
+      setFiles(validFiles.slice(0, 2));
       return;
     }
     
@@ -82,8 +83,8 @@ export default function Home() {
       'application/vnd.ms-excel': ['.xls'],
       'text/csv': ['.csv']
     },
-    maxFiles: activeTab === "mixes" ? 1 : 5,
-    multiple: activeTab === "materials"
+    maxFiles: activeTab === "mixes" ? 2 : 5,
+    multiple: true
   });
 
   // Remove a specific file
@@ -140,10 +141,23 @@ export default function Home() {
       let processedData: any[][] = [];
 
       if (activeTab === "mixes") {
-        // Mixes: single file only
-        const jsonData = await fileToArray(files[0]);
-        console.log("Mix data loaded:", jsonData.length, "rows");
-        processedData = convertMPAQMixes(jsonData);
+        // Mixes: can be 1 file (MPAQ) or 2 files (Sarjeants: mix + materials)
+        if (selectedDispatch === "Sarjeants") {
+          if (files.length < 2) {
+            throw new Error("Sarjeants conversion requires 2 files: mix file and materials lookup file");
+          }
+          // Load both files
+          const mixData = await fileToArray(files[0]);
+          const materialsData = await fileToArray(files[1]);
+          console.log("Mix data loaded:", mixData.length, "rows");
+          console.log("Materials data loaded:", materialsData.length, "rows");
+          processedData = convertMPAQMixes(mixData, materialsData);
+        } else {
+          // MPAQ or other: single file
+          const jsonData = await fileToArray(files[0]);
+          console.log("Mix data loaded:", jsonData.length, "rows");
+          processedData = convertMPAQMixes(jsonData);
+        }
         
       } else if (activeTab === "materials") {
         // Materials: can handle 1-5 files
@@ -256,7 +270,7 @@ export default function Home() {
             </p>
           </div>
 
-          <Tabs defaultValue="mixes" value={activeTab} onValueChange={(val) => {
+          <Tabs defaultValue="materials" value={activeTab} onValueChange={(val) => {
             setActiveTab(val);
             setFiles([]); // Clear files when switching tabs
             setError(null);
@@ -266,16 +280,16 @@ export default function Home() {
           }} className="w-full">
             <TabsList className="grid w-full grid-cols-3 bg-secondary/20 p-1 rounded-xl mb-6 h-auto">
               <TabsTrigger 
-                value="mixes" 
-                className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-8 transition-all"
-              >
-                Mix Conversion
-              </TabsTrigger>
-              <TabsTrigger 
                 value="materials" 
                 className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-8 transition-all"
               >
                 Material Conversion
+              </TabsTrigger>
+              <TabsTrigger 
+                value="mixes" 
+                className="rounded-lg text-base font-medium data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm h-8 transition-all"
+              >
+                Mix Conversion
               </TabsTrigger>
               <TabsTrigger 
                 value="mix-material" 
