@@ -143,9 +143,52 @@ function isZeroOrEmpty(val: any): boolean {
 // ---------- Main conversion function ----------
 
 /**
- * Convert Sarjeants mix data with materials lookup
+ * Create materials lookup map from materials data
+ * Maps material type name to Production Item Code
+ */
+function createMaterialsLookup(materialsData: any[][]): Map<string, string> {
+    const lookup = new Map<string, string>();
+    
+    if (!materialsData || materialsData.length === 0) {
+        return lookup;
+    }
+    
+    // First row is headers
+    const headers = materialsData[0];
+    const materialTypeIndex = headers.findIndex((h: any) => 
+        String(h).includes('Material Type') && String(h).includes('Required')
+    );
+    const productionCodeIndex = headers.findIndex((h: any) => 
+        String(h).includes('Production Item Code')
+    );
+    
+    if (materialTypeIndex === -1 || productionCodeIndex === -1) {
+        console.warn("Could not find required columns in materials file");
+        return lookup;
+    }
+    
+    // Process each row and build lookup
+    for (let i = 1; i < materialsData.length; i++) {
+        const row = materialsData[i];
+        const materialType = row[materialTypeIndex];
+        const productionCode = row[productionCodeIndex];
+        
+        if (materialType && productionCode) {
+            // Only store if not already present (first occurrence wins)
+            if (!lookup.has(String(materialType))) {
+                lookup.set(String(materialType), String(productionCode));
+            }
+        }
+    }
+    
+    console.log(`Created materials lookup with ${lookup.size} entries`);
+    return lookup;
+}
+
+/**
+ * Convert MPAQ mix data with materials lookup
  * @param mixData - 2D array from mix-list.csv
- * @param materialsData - 2D array from materials lookup file (optional, not used for ID transformation)
+ * @param materialsData - 2D array from materials lookup file (required for ID transformation)
  * @returns 2D array in Command Series import format
  */
 export function convertMPAQMixes(mixData: any[][], materialsData?: any[][]): any[][] {
@@ -153,6 +196,12 @@ export function convertMPAQMixes(mixData: any[][], materialsData?: any[][]): any
     console.log("Mix data rows:", mixData.length);
     if (materialsData) {
         console.log("Materials data rows:", materialsData.length);
+    }
+    
+    // Create materials lookup
+    const materialsLookup = materialsData ? createMaterialsLookup(materialsData) : new Map<string, string>();
+    if (materialsLookup.size === 0) {
+        console.warn("Warning: No materials lookup available. Using raw material IDs.");
     }
     
     if (mixData.length === 0) {
@@ -283,6 +332,15 @@ export function convertMPAQMixes(mixData: any[][], materialsData?: any[][]): any
             for (const [matType, matId, matName, matTarget] of constituents) {
                 const unitName = getUnitForMaterialType(matType);
                 
+                // Look up Production Item Code from materials file by material name
+                let productionCode = matId; // Default to raw ID
+                if (matName && materialsLookup.has(String(matName))) {
+                    productionCode = materialsLookup.get(String(matName))!;
+                    console.log(`Mapped ${matName} (${matId}) -> ${productionCode}`);
+                } else if (matType !== "Water") {
+                    console.warn(`No lookup found for material: ${matName} (ID: ${matId})`);
+                }
+                
                 const outRow = [
                     plant,                          // Plant Code
                     baseData.mixName,               // Mix Name
@@ -305,7 +363,7 @@ export function convertMPAQMixes(mixData: any[][], materialsData?: any[][]): any
                     "",                             // Mix Usage
                     "",                             // Dispatch Slump Range
                     "",                             // Dispatch
-                    matId,                          // Constituent Item Code (raw ID)
+                    productionCode,                 // Constituent Item Code (looked up from materials file)
                     matName || "",                  // Constituent Item Description
                     matTarget || "",                // Quantity
                     unitName                        // Unit Name
